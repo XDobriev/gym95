@@ -11,7 +11,8 @@
     "build": "tsc -p tsconfig.json",
     "build:webhook": "esbuild src/webhook.ts --bundle --platform=node --target=node22 --outfile=dist/webhook-bundle.js --minify --sourcemap=inline",
     "start": "node dist/bot.js",
-    "dev": "tsx watch src/bot.ts"
+    "dev": "tsx watch src/bot.ts",
+    "set-webhook": "tsx scripts/set-webhook.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
