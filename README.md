@@ -1,6 +1,6 @@
 # gym95 — дневник тренировок
 
-Личный Telegram-бот для ведения дневника тренировок. Node.js + TypeScript, Telegraf, Supabase (Postgres), деплой на Railway как worker-процесс с long polling (без VPS, без открытого HTTP-порта).
+Личный Telegram-бот для ведения дневника тренировок. Node.js + TypeScript, Telegraf, Supabase (Postgres), деплой на Yandex Cloud Functions (webhook, без VPS).
 
 ## MVP
 
@@ -11,7 +11,7 @@
 - `/progress <упражнение>` — история весов/повторений по упражнению
 - `/export` — вся история в markdown (для вставки в LLM-чат)
 
-Кардио/бассейн/смешанные тренировки и напоминания — второй этап (см. `railway.json`/структуру `src/handlers/workout/cardioStep.ts` — заготовка).
+Кардио/бассейн/смешанные тренировки и напоминания — второй этап (см. структуру `src/handlers/workout/cardioStep.ts` — заготовка).
 
 ## Локальный запуск
 
@@ -21,16 +21,67 @@
 4. `npm install`
 5. `npm run dev` — запуск с автоперезагрузкой (long polling, ngrok не нужен).
 
-## Сборка и запуск в продакшене
+## Локальный запуск без авто-перезагрузки
+
+Скомпилировать и запустить бота через long polling без `tsx watch` (например, чтобы проверить собранный `dist/` перед деплоем):
 
 ```
 npm run build
 npm run start
 ```
 
-## Деплой на Railway
+## Деплой на Yandex Cloud Functions
 
-1. Создать сервис из GitHub-репозитория.
-2. Задать переменные окружения (`BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`) в Dashboard → Variables.
-3. Домен/порт не привязывать — бот работает через long polling, HTTP не поднимается.
-4. `railway.json` уже настроен на `npm install && npm run build` при сборке и `npm run start` при запуске.
+Требуется установленный и авторизованный [`yc` CLI](https://yandex.cloud/ru/docs/cli/quickstart).
+
+1. Собрать бандл функции:
+   ```
+   npm run build:webhook
+   ```
+2. Упаковать в zip (PowerShell):
+   ```
+   Compress-Archive -Path dist/webhook-bundle.js -DestinationPath function.zip -Force
+   ```
+   Внутри архива файл должен называться `webhook-bundle.js` — это важно для entrypoint ниже.
+3. Создать функцию (один раз):
+   ```
+   yc serverless function create --name=gym95-bot
+   ```
+4. Сгенерировать секрет для проверки подлинности вебхук-запросов и сохранить его в `.env` как `WEBHOOK_SECRET` (PowerShell):
+   ```
+   [guid]::NewGuid().ToString("N")
+   ```
+   Скопируйте вывод в `WEBHOOK_SECRET` в `.env` — та же строка понадобится на следующем шаге и в шаге настройки вебхука.
+5. Опубликовать новую версию с переменными окружения:
+   ```
+   yc serverless function version create `
+     --function-name=gym95-bot `
+     --runtime=nodejs22 `
+     --entrypoint=webhook-bundle.handler `
+     --memory=128m `
+     --execution-timeout=10s `
+     --source-path=function.zip `
+     --environment BOT_TOKEN=<токен>,SUPABASE_URL=<url>,SUPABASE_KEY=<key>,NODE_OPTIONS=--enable-source-maps,WEBHOOK_SECRET=<секрет>
+   ```
+   `NODE_OPTIONS=--enable-source-maps` включает символизацию стек-трейсов по инлайновому source map, зашитому в бандл esbuild'ом — без этого ошибки в логах будут указывать на минифицированный код.
+6. Разрешить вызов без IAM-авторизации (иначе Telegram не сможет достучаться):
+   ```
+   yc serverless function allow-unauthenticated-invoke gym95-bot
+   ```
+7. Узнать публичный URL функции:
+   ```
+   yc serverless function get gym95-bot
+   ```
+   URL имеет вид `https://functions.yandexcloud.net/<id>`.
+8. Настроить вебхук в Telegram:
+   ```
+   npm run set-webhook -- https://functions.yandexcloud.net/<id>
+   ```
+9. Проверить, что вебхук принят: открыть в браузере
+   `https://api.telegram.org/bot<токен>/getWebhookInfo` — поле `url` должно совпадать с URL функции, `last_error_message` — отсутствовать.
+
+При обновлении кода: повторить шаги 1–2, затем `yc serverless function version create` (шаг 5) — новая версия автоматически станет активной.
+
+## Локальная разработка
+
+Локально бот по-прежнему работает через long polling — см. раздел "Локальный запуск" выше (`npm run dev`), ngrok не нужен.
