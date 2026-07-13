@@ -1,16 +1,28 @@
 import { Telegraf, Context, Markup } from 'telegraf';
 import { getExerciseHistory, getLastExercisesByUser } from '../db/exercises';
 import { formatDateShortRu, formatSetsInline } from '../utils/format';
+import { buildProgressChartUrl } from '../utils/chart';
 
-async function renderProgress(userId: number, exerciseName: string): Promise<string> {
+const TELEGRAM_CAPTION_LIMIT = 1024;
+
+async function sendProgress(ctx: Context, userId: number, exerciseName: string): Promise<void> {
   const history = await getExerciseHistory(userId, exerciseName);
 
   if (history.length === 0) {
-    return `Пока нет истории по «${exerciseName}».`;
+    await ctx.reply(`Пока нет истории по «${exerciseName}».`);
+    return;
   }
 
   const lines = history.map((entry) => `${formatDateShortRu(entry.date)}: ${formatSetsInline(entry.sets)}`);
-  return `📈 ${exerciseName}\n\n${lines.join('\n')}`;
+  const text = `📈 ${exerciseName}\n\n${lines.join('\n')}`;
+  const chartUrl = buildProgressChartUrl(exerciseName, history);
+
+  if (text.length <= TELEGRAM_CAPTION_LIMIT) {
+    await ctx.replyWithPhoto(chartUrl, { caption: text });
+  } else {
+    await ctx.replyWithPhoto(chartUrl, { caption: `📈 ${exerciseName}` });
+    await ctx.reply(lines.join('\n'));
+  }
 }
 
 function getCommandArgs(text: string): string {
@@ -26,7 +38,7 @@ export function registerProgress(bot: Telegraf): void {
     const exerciseName = getCommandArgs(text);
 
     if (exerciseName.length > 0) {
-      await ctx.reply(await renderProgress(userId, exerciseName));
+      await sendProgress(ctx, userId, exerciseName);
       return;
     }
 
@@ -53,6 +65,7 @@ export function registerProgress(bot: Telegraf): void {
     const exerciseName = recentNames[index];
     if (!exerciseName) return;
 
-    await ctx.editMessageText(await renderProgress(userId, exerciseName));
+    await ctx.editMessageReplyMarkup(undefined);
+    await sendProgress(ctx, userId, exerciseName);
   });
 }
