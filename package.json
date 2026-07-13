@@ -4,6 +4,9 @@
   "description": "Личный Telegram-бот — дневник тренировок",
   "private": true,
   "main": "dist/bot.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/bot.js",
