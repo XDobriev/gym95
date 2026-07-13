@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:webhook": "esbuild src/webhook.ts --bundle --platform=node --target=node22 --outfile=dist/webhook-bundle.js --minify",
     "start": "node dist/bot.js",
     "dev": "tsx watch src/bot.ts"
   },
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "esbuild": "^0.28.1",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   }
