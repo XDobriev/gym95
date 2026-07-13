@@ -47,7 +47,12 @@ npm run start
    ```
    yc serverless function create --name=gym95-bot
    ```
-4. Опубликовать новую версию с переменными окружения:
+4. Сгенерировать секрет для проверки подлинности вебхук-запросов и сохранить его в `.env` как `WEBHOOK_SECRET` (PowerShell):
+   ```
+   [guid]::NewGuid().ToString("N")
+   ```
+   Скопируйте вывод в `WEBHOOK_SECRET` в `.env` — та же строка понадобится на следующем шаге и в шаге настройки вебхука.
+5. Опубликовать новую версию с переменными окружения:
    ```
    yc serverless function version create `
      --function-name=gym95-bot `
@@ -56,23 +61,23 @@ npm run start
      --memory=128m `
      --execution-timeout=10s `
      --source-path=function.zip `
-     --environment BOT_TOKEN=<токен>,SUPABASE_URL=<url>,SUPABASE_KEY=<key>,NODE_OPTIONS=--enable-source-maps
+     --environment BOT_TOKEN=<токен>,SUPABASE_URL=<url>,SUPABASE_KEY=<key>,NODE_OPTIONS=--enable-source-maps,WEBHOOK_SECRET=<секрет>
    ```
    `NODE_OPTIONS=--enable-source-maps` включает символизацию стек-трейсов по инлайновому source map, зашитому в бандл esbuild'ом — без этого ошибки в логах будут указывать на минифицированный код.
-5. Разрешить вызов без IAM-авторизации (иначе Telegram не сможет достучаться):
+6. Разрешить вызов без IAM-авторизации (иначе Telegram не сможет достучаться):
    ```
    yc serverless function allow-unauthenticated-invoke gym95-bot
    ```
-6. Узнать публичный URL функции:
+7. Узнать публичный URL функции:
    ```
    yc serverless function get gym95-bot
    ```
    URL имеет вид `https://functions.yandexcloud.net/<id>`.
-7. Настроить вебхук в Telegram:
+8. Настроить вебхук в Telegram:
    ```
    npm run set-webhook -- https://functions.yandexcloud.net/<id>
    ```
-8. Проверить, что вебхук принят: открыть в браузере
+9. Проверить, что вебхук принят: открыть в браузере
    `https://api.telegram.org/bot<токен>/getWebhookInfo` — поле `url` должно совпадать с URL функции, `last_error_message` — отсутствовать.
 
 При обновлении кода: повторить шаги 1–2, затем `yc serverless function version create` (шаг 4) — новая версия автоматически станет активной.
