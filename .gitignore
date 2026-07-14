@@ -4,3 +4,4 @@ dist/
 *.log
 .impeccable/
 supabase/.temp/
+function.zip

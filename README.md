@@ -1,6 +1,6 @@
 # gym95 — дневник тренировок
 
-Личный Telegram-бот для ведения дневника тренировок. Node.js + TypeScript, Telegraf, Supabase (Postgres), деплой на Yandex Cloud Functions (webhook, без VPS).
+Личный Telegram-бот для ведения дневника тренировок. Node.js + TypeScript, Telegraf, Supabase (Postgres), деплой на Render.com (long polling, бесплатный тариф).
 
 ## MVP
 
@@ -30,7 +30,27 @@ npm run build
 npm run start
 ```
 
-## Деплой на Yandex Cloud Functions
+## Деплой на Render.com (текущий способ)
+
+Бесплатный тариф, карта не нужна. Бот работает через long polling (как локально), HTTP-сервер в `src/bot.ts` слушает `$PORT` только для health-check — сам он ничего не обрабатывает.
+
+1. Зарегистрироваться на [render.com](https://render.com) (можно через GitHub, без карты) и подключить репозиторий `gym95`.
+2. Создать **Web Service** (не Static Site и не Background Worker — только Web Service доступен на бесплатном тарифе с постоянным аптаймом при пинге):
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm run start`
+3. В Environment добавить `BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY` (те же значения, что и в `.env`). `WEBHOOK_SECRET` и переменные для Yandex Cloud не нужны — вебхук не используется.
+4. После первого деплоя скопировать публичный URL сервиса (вида `https://gym95-bot.onrender.com`).
+5. Настроить бесплатный внешний пинг на `<url>/` каждые 10–14 минут (например, [UptimeRobot](https://uptimerobot.com), регистрация без карты) — иначе Render усыпит сервис через 15 минут простоя по HTTP. Сам бот при этом продолжит работать, пока Render не усыпил контейнер, а пинг просто поддерживает контейнер живым.
+6. Проверить, что вебхук в Telegram снят (иначе бот не будет получать апдейты через long polling):
+   ```
+   curl "https://api.telegram.org/bot<токен>/deleteWebhook"
+   ```
+
+**Почему не Yandex Cloud Functions:** изначально бот был перенесён на Yandex Cloud Functions (webhook), но в июле 2026 обнаружилось, что РКН блокирует именно входящие соединения от серверов Telegram к российской инфраструктуре — Telegram стабильно получал `Connection timed out` при попытке доставить апдейты на функцию, хотя сама функция была настроена и работала корректно (проверено прямыми запросами). Код вебхука (`src/webhook.ts`, `scripts/set-webhook.ts`) оставлен в репозитории на случай, если ситуация с блокировками изменится или появится need в хостинге вне РФ с поддержкой webhook.
+
+## Архивный способ: деплой на Yandex Cloud Functions
+
+⚠️ Не работает из РФ по сети (см. причину выше) — оставлено как справочный материал.
 
 Требуется установленный и авторизованный [`yc` CLI](https://yandex.cloud/ru/docs/cli/quickstart).
 
