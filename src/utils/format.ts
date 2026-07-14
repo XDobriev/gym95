@@ -4,6 +4,16 @@ export function formatSet(set: SetEntry): string {
   return set.weight > 0 ? `${set.weight}×${set.reps}` : `×${set.reps}`;
 }
 
+// Склонение по правилам русского языка: 1 подход, 2 подхода, 5 подходов.
+export function pluralizeRu(n: number, forms: [one: string, few: string, many: string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return forms[2];
+  if (mod10 === 1) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4) return forms[1];
+  return forms[2];
+}
+
 export function formatSetsInline(sets: SetEntry[]): string {
   return sets.map(formatSet).join(', ');
 }
@@ -70,5 +80,5 @@ export function formatCardioInline(cardio: {
   if (cardio.distanceKm !== null) parts.push(`📏 ${cardio.distanceKm} км`);
   if (cardio.inclinePercent !== null && cardio.inclinePercent !== undefined) parts.push(`⛰️ уклон ${cardio.inclinePercent}%`);
   if (cardio.avgHeartRate !== null) parts.push(`❤️ ${cardio.avgHeartRate} уд/мин`);
-  return parts.join(', ');
+  return parts.join('\n');
 }

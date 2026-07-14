@@ -1,4 +1,4 @@
-import { Context } from 'telegraf';
+import { Context, Markup } from 'telegraf';
 import { MuscleGroup } from '../../types/domain';
 import { getDraft, setStep, canAddCardio } from './state';
 import { getLastExercisesByUser } from '../../db/exercises';
@@ -10,7 +10,7 @@ import {
   groupExerciseKeyboard,
 } from './keyboards';
 
-async function promptSetsForExercise(ctx: Context, name: string, viaEdit: boolean): Promise<void> {
+export async function promptSetsForExercise(ctx: Context, name: string, viaEdit: boolean): Promise<void> {
   const text = `${name}. Введи подходы одной строкой, например:\n40x12, 40x12, 42.5x10`;
   const reply_markup = enteringSetsKeyboard();
 
@@ -39,7 +39,7 @@ export async function renderExerciseMenu(
     prefixText +
     (recentNames.length > 0
       ? 'Выбери упражнение из последних или введи новое:'
-      : 'Введи название первого упражнения (кнопка «✏️ Ввести своё название»):');
+      : 'Выбери упражнение из справочника или введи своё:');
   const reply_markup = exerciseNameKeyboard(recentNames, canAddCardio(draft));
 
   if (viaEdit) {
@@ -99,6 +99,24 @@ export async function handleMuscleGroupChosen(ctx: Context, group: MuscleGroup |
   await ctx.editMessageText('Выбери упражнение:', { reply_markup: groupExerciseKeyboard(names) });
 }
 
+// Восстанавливает экран выбора упражнения внутри группы мышц при "Продолжить тренировку" —
+// использует уже закэшированный в драфте список, не перезапрашивая группу у БД.
+export async function renderExerciseInGroupResume(ctx: Context, userId: number): Promise<void> {
+  const draft = getDraft(userId);
+  if (!draft) return;
+
+  const names = draft.groupExerciseNames ?? [];
+
+  if (names.length === 0) {
+    await ctx.editMessageText('Пока пусто. Добавь упражнение через «✏️ Ввести своё название».', {
+      reply_markup: groupExerciseKeyboard([]),
+    });
+    return;
+  }
+
+  await ctx.editMessageText('Выбери упражнение:', { reply_markup: groupExerciseKeyboard(names) });
+}
+
 export async function handleExerciseChosenFromGroup(ctx: Context, index: number): Promise<void> {
   const userId = ctx.from?.id;
   if (!userId) return;
@@ -136,7 +154,10 @@ export async function handleCustomExercisePrompt(ctx: Context): Promise<void> {
   if (!draft) return;
 
   setStep(userId, 'entering_custom_exercise_name');
-  await ctx.editMessageText('Введи название упражнения:');
+  await ctx.editMessageText('Введи название упражнения:', {
+    reply_markup: Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'w:back_to_exercise_menu')]])
+      .reply_markup,
+  });
 }
 
 export async function handleCustomExerciseNameEntered(ctx: Context, name: string): Promise<void> {

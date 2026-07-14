@@ -2,19 +2,24 @@ import { Context } from 'telegraf';
 import { DraftWorkout } from '../../types/draft';
 import { getDraft, setStep, canAddCardio } from './state';
 import { parseSetsLine } from '../../utils/setsParser';
-import { formatSetsInline } from '../../utils/format';
+import { formatSetsInline, pluralizeRu } from '../../utils/format';
 import { enteringSetsKeyboard, exerciseSavedMenuKeyboard, exerciseNameKeyboard } from './keyboards';
 import { getLastExercisesByUser } from '../../db/exercises';
 
-function renderExerciseSavedMenu(draft: DraftWorkout): string {
-  const lines = draft.exercises.map(
-    (ex, i) => `${i + 1}. ${ex.name} — ${ex.sets.length} подход(ов)`
-  );
-
+export function renderExerciseSavedMenu(draft: DraftWorkout): string {
   const lastExercise = draft.exercises[draft.exercises.length - 1];
   const header = `✅ ${lastExercise.name}: ${formatSetsInline(lastExercise.sets)}`;
 
-  return [header, '', 'Внесено в тренировку:', ...lines].join('\n');
+  const previousExercises = draft.exercises.slice(0, -1);
+  if (previousExercises.length === 0) {
+    return header;
+  }
+
+  const lines = previousExercises.map(
+    (ex, i) => `${i + 1}. ${ex.name} — ${ex.sets.length} ${pluralizeRu(ex.sets.length, ['подход', 'подхода', 'подходов'])}`
+  );
+
+  return [header, '', 'Ранее в тренировке:', ...lines].join('\n');
 }
 
 function upsertCurrentExercise(
@@ -55,6 +60,13 @@ export async function handleSetsTextEntered(ctx: Context, text: string): Promise
   });
 }
 
+export async function promptMoreSetsForExercise(ctx: Context, name: string): Promise<void> {
+  await ctx.editMessageText(
+    `${name}. Введи ещё подходы, например:\n40x12, 40x12`,
+    { reply_markup: enteringSetsKeyboard() }
+  );
+}
+
 export async function handleAddMoreSets(ctx: Context): Promise<void> {
   const userId = ctx.from?.id;
   if (!userId) return;
@@ -67,10 +79,7 @@ export async function handleAddMoreSets(ctx: Context): Promise<void> {
   draft.appendToLastExercise = true;
   setStep(userId, 'entering_sets');
 
-  await ctx.editMessageText(
-    `${lastExercise.name}. Введи ещё подходы, например:\n40x12, 40x12`,
-    { reply_markup: enteringSetsKeyboard() }
-  );
+  await promptMoreSetsForExercise(ctx, lastExercise.name);
 }
 
 export async function handleRepeatLast(ctx: Context): Promise<void> {

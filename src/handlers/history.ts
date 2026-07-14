@@ -2,7 +2,7 @@ import { Telegraf, Context, Markup } from 'telegraf';
 import { getRecentWorkouts, countWorkouts } from '../db/workouts';
 import { getExercisesForWorkouts } from '../db/exercises';
 import { getCardioSessionsForWorkouts } from '../db/cardio';
-import { formatCardioInline, formatDateShortRu, formatWorkoutTypeWithEmoji } from '../utils/format';
+import { formatCardioInline, formatDateShortRu, formatWorkoutTypeWithEmoji, pluralizeRu } from '../utils/format';
 
 const PAGE_SIZE = 5;
 
@@ -13,7 +13,7 @@ async function renderHistoryPage(userId: number, offset: number): Promise<{ text
   ]);
 
   if (workouts.length === 0) {
-    return { text: 'Пока нет ни одной тренировки. Начни с /new_workout', hasMore: false };
+    return { text: '📭 Пока нет ни одной тренировки. Начни с /new_workout', hasMore: false };
   }
 
   const workoutIds = workouts.map((w) => w.id);
@@ -34,7 +34,8 @@ async function renderHistoryPage(userId: number, offset: number): Promise<{ text
       parts.push(`🔥 Разминка: ${workout.warmup_minutes} мин`);
     }
     if (names.length > 0) {
-      parts.push(`${names.join(', ')} (${names.length} упражнени${names.length === 1 ? 'е' : 'й'})`);
+      const word = pluralizeRu(names.length, ['упражнение', 'упражнения', 'упражнений']);
+      parts.push(`${names.join(', ')} (${names.length} ${word})`);
     }
     if (cardio) {
       parts.push(
@@ -54,7 +55,10 @@ async function renderHistoryPage(userId: number, offset: number): Promise<{ text
     return `📅 ${formatDateShortRu(workout.date)} — ${formatWorkoutTypeWithEmoji(workout.type)}\n${summary}`;
   });
 
-  return { text: blocks.join('\n\n'), hasMore: offset + PAGE_SIZE < total };
+  const hasMore = offset + PAGE_SIZE < total;
+  const text = blocks.join('\n\n') + (!hasMore && offset > 0 ? '\n\n📍 Это все тренировки.' : '');
+
+  return { text, hasMore };
 }
 
 function historyKeyboard(offset: number, hasMore: boolean) {

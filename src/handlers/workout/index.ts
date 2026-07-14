@@ -1,8 +1,8 @@
 import { Telegraf, Context } from 'telegraf';
 import { WorkoutType } from '../../types/domain';
-import { getDraft, startDraft, clearDraft } from './state';
-import { typeKeyboard, resumeOrRestartKeyboard } from './keyboards';
-import { handleTypeChosen, handleWarmupMinutesEntered, handleWarmupSkip } from './typeStep';
+import { getDraft, startDraft, clearDraft, canAddCardio } from './state';
+import { typeKeyboard, resumeOrRestartKeyboard, exerciseSavedMenuKeyboard } from './keyboards';
+import { handleTypeChosen, handleWarmupMinutesEntered, handleWarmupSkip, renderWarmupPrompt } from './typeStep';
 import {
   handleExerciseChosenByIndex,
   handleCustomExercisePrompt,
@@ -12,6 +12,9 @@ import {
   handleExerciseChosenFromGroup,
   handleBackToMuscleGroups,
   handleBackToExerciseMenu,
+  renderExerciseMenu,
+  renderExerciseInGroupResume,
+  promptSetsForExercise,
 } from './exerciseNameStep';
 import {
   handleSetsTextEntered,
@@ -19,6 +22,8 @@ import {
   handleRepeatLast,
   handleNextExercise,
   handleCancelExercise,
+  renderExerciseSavedMenu,
+  promptMoreSetsForExercise,
 } from './setsInputStep';
 import {
   promptCardioActivity,
@@ -32,6 +37,11 @@ import {
   handleCardioPulseEntered,
   handleCardioPulseSkip,
   handleCardioCancel,
+  renderCardioDurationResume,
+  proceedAfterDuration,
+  askForIncline,
+  askForPulse,
+  finalizeCardioBlock,
 } from './cardioStep';
 import { saveDraftWorkout } from './finish';
 
@@ -78,8 +88,80 @@ async function handleFinishAction(ctx: Context): Promise<void> {
   await ctx.editMessageText(result.text);
 }
 
+// Перерисовывает текущий шаг незавершённой тренировки в это же сообщение —
+// чтобы "Продолжить" не отправляло пользователя искать клавиатуру в старых сообщениях.
+async function renderCurrentStep(ctx: Context, userId: number): Promise<void> {
+  const draft = getDraft(userId);
+  if (!draft) return;
+
+  switch (draft.step) {
+    case 'choosing_type':
+      await ctx.editMessageText('Выбери тип тренировки:', { reply_markup: typeKeyboard() });
+      return;
+    case 'entering_warmup':
+      await renderWarmupPrompt(ctx);
+      return;
+    case 'choosing_exercise_name':
+      await renderExerciseMenu(ctx, userId, true);
+      return;
+    case 'choosing_muscle_group':
+      await handleShowAllExercises(ctx);
+      return;
+    case 'choosing_exercise_in_group':
+      await renderExerciseInGroupResume(ctx, userId);
+      return;
+    case 'entering_custom_exercise_name':
+      await handleCustomExercisePrompt(ctx);
+      return;
+    case 'entering_sets':
+      if (!draft.currentExerciseName) return;
+      if (draft.appendToLastExercise) {
+        await promptMoreSetsForExercise(ctx, draft.currentExerciseName);
+      } else {
+        await promptSetsForExercise(ctx, draft.currentExerciseName, true);
+      }
+      return;
+    case 'exercise_saved_menu':
+      await ctx.editMessageText(renderExerciseSavedMenu(draft), {
+        reply_markup: exerciseSavedMenuKeyboard(canAddCardio(draft)),
+      });
+      return;
+    case 'choosing_cardio_activity':
+      await promptCardioActivity(ctx);
+      return;
+    case 'entering_cardio_duration':
+      await renderCardioDurationResume(ctx, userId);
+      return;
+    case 'entering_cardio_distance':
+      await proceedAfterDuration(ctx, userId, true);
+      return;
+    case 'entering_cardio_incline':
+      await askForIncline(ctx, userId, true);
+      return;
+    case 'entering_cardio_pulse':
+      await askForPulse(ctx, userId, true);
+      return;
+    case 'cardio_saved_menu':
+      await finalizeCardioBlock(ctx, userId, true);
+      return;
+    default:
+      return;
+  }
+}
+
 async function handleResumeAction(ctx: Context): Promise<void> {
-  await ctx.editMessageText('Продолжаем. Используй кнопки на предыдущих сообщениях или /done чтобы завершить.');
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  await renderCurrentStep(ctx, userId);
+}
+
+async function handleCancelWorkoutAction(ctx: Context): Promise<void> {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  clearDraft(userId);
+  await ctx.editMessageText('Тренировка отменена — в ней ничего не сохранено. Начни заново — /new_workout');
 }
 
 async function handleRestartAction(ctx: Context): Promise<void> {
@@ -210,6 +292,11 @@ export function registerWorkout(bot: Telegraf): void {
   bot.action('w:restart', async (ctx) => {
     await ctx.answerCbQuery();
     await handleRestartAction(ctx);
+  });
+
+  bot.action('w:cancel_workout', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCancelWorkoutAction(ctx);
   });
 
   bot.on('text', async (ctx, next) => {

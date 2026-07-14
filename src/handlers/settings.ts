@@ -73,7 +73,7 @@ export function registerSettings(bot: Telegraf): void {
 
     waitingForTime.delete(userId);
     const settings = await upsertSettings(userId, { reminder_time: text });
-    await ctx.reply(`Готово. Время обновлено: ${text} (Europe/Moscow).`, {
+    await ctx.reply(`✅ Готово! Время обновлено: ${text} (Europe/Moscow).`, {
       reply_markup: settingsKeyboard(settings),
     });
   });

@@ -4,6 +4,12 @@ import { getDraft, setType, setStep } from './state';
 import { activityKeyboard, optionalSkipKeyboard } from './keyboards';
 import { renderExerciseMenu } from './exerciseNameStep';
 
+export async function renderWarmupPrompt(ctx: Context): Promise<void> {
+  await ctx.editMessageText('🔥 Разминка: сколько минут? Введи число или пропусти:', {
+    reply_markup: optionalSkipKeyboard('w:warmup_skip', 'w:cancel_workout', '❌ Отменить тренировку'),
+  });
+}
+
 export async function handleTypeChosen(ctx: Context, type: WorkoutType): Promise<void> {
   const userId = ctx.from?.id;
   if (!userId) return;
@@ -13,9 +19,7 @@ export async function handleTypeChosen(ctx: Context, type: WorkoutType): Promise
 
   setType(userId, type);
   setStep(userId, 'entering_warmup');
-  await ctx.editMessageText('🔥 Была разминка/растяжка? Сколько минут? Введи число или пропусти:', {
-    reply_markup: optionalSkipKeyboard('w:warmup_skip'),
-  });
+  await renderWarmupPrompt(ctx);
 }
 
 async function proceedAfterWarmup(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {

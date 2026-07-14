@@ -78,10 +78,40 @@ export async function handleCardioDurationDefault(ctx: Context): Promise<void> {
   await proceedAfterDuration(ctx, userId, true);
 }
 
-async function proceedAfterDuration(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+function cardioCancelLabel(draft: DraftWorkout): string {
+  return draft.type === 'mixed' ? '❌ Отмена кардио' : '❌ Отменить тренировку';
+}
+
+// Восстанавливает промпт длительности при "Продолжить тренировку" — текст и клавиатура
+// зависят от типа тренировки (бассейн) и выбранной активности (быстрый вариант "30 мин").
+export async function renderCardioDurationResume(ctx: Context, userId: number): Promise<void> {
+  const draft = getDraft(userId);
+  if (!draft || !draft.cardio) return;
+
+  if (draft.type === 'pool') {
+    await ctx.editMessageText('🕒 Сколько минут длилось плавание? Введи число:');
+    return;
+  }
+
+  const activity = draft.cardio.activity as CardioActivityChoice | undefined;
+  if (activity && QUICK_DURATION_ACTIVITIES.includes(activity)) {
+    await ctx.editMessageText('🕒 Длительность обычно 30 мин — оставь или введи своё число:', {
+      reply_markup: cardioDurationQuickKeyboard(),
+    });
+  } else {
+    await ctx.editMessageText('🕒 Сколько минут длилась активность? Введи число:');
+  }
+}
+
+export async function proceedAfterDuration(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+  const draft = getDraft(userId);
   setStep(userId, 'entering_cardio_distance');
   const text = '📏 Дистанция в километрах? Введи число или пропусти:';
-  const reply_markup = optionalSkipKeyboard('w:cardio_skip_distance', 'w:cardio_cancel');
+  const reply_markup = optionalSkipKeyboard(
+    'w:cardio_skip_distance',
+    'w:cardio_cancel',
+    draft ? cardioCancelLabel(draft) : undefined
+  );
 
   if (viaEdit) {
     await ctx.editMessageText(text, { reply_markup });
@@ -101,7 +131,7 @@ export async function handleCardioDistanceEntered(ctx: Context, text: string): P
   if (!Number.isFinite(distance) || distance <= 0) {
     await ctx.reply(
       'Введи число километров больше нуля, например 5 или 5.5, либо нажми «⏭️ Пропустить»',
-      { reply_markup: optionalSkipKeyboard('w:cardio_skip_distance', 'w:cardio_cancel') }
+      { reply_markup: optionalSkipKeyboard('w:cardio_skip_distance', 'w:cardio_cancel', cardioCancelLabel(draft)) }
     );
     return;
   }
@@ -131,10 +161,15 @@ async function proceedAfterDistance(ctx: Context, userId: number, viaEdit: boole
   }
 }
 
-async function askForIncline(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+export async function askForIncline(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+  const draft = getDraft(userId);
   setStep(userId, 'entering_cardio_incline');
   const text = '⛰️ Уклон в %? Введи число или пропусти:';
-  const reply_markup = optionalSkipKeyboard('w:cardio_skip_incline', 'w:cardio_cancel');
+  const reply_markup = optionalSkipKeyboard(
+    'w:cardio_skip_incline',
+    'w:cardio_cancel',
+    draft ? cardioCancelLabel(draft) : undefined
+  );
 
   if (viaEdit) {
     await ctx.editMessageText(text, { reply_markup });
@@ -154,7 +189,7 @@ export async function handleCardioInclineEntered(ctx: Context, text: string): Pr
   if (!Number.isFinite(incline) || incline < 0) {
     await ctx.reply(
       'Введи число процентов уклона, например 2 или 5.5, либо нажми «⏭️ Пропустить»',
-      { reply_markup: optionalSkipKeyboard('w:cardio_skip_incline', 'w:cardio_cancel') }
+      { reply_markup: optionalSkipKeyboard('w:cardio_skip_incline', 'w:cardio_cancel', cardioCancelLabel(draft)) }
     );
     return;
   }
@@ -173,10 +208,15 @@ export async function handleCardioInclineSkip(ctx: Context): Promise<void> {
   await askForPulse(ctx, userId, true);
 }
 
-async function askForPulse(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+export async function askForPulse(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+  const draft = getDraft(userId);
   setStep(userId, 'entering_cardio_pulse');
   const text = '❤️ Средний пульс? Введи число или пропусти:';
-  const reply_markup = optionalSkipKeyboard('w:cardio_skip_pulse', 'w:cardio_cancel');
+  const reply_markup = optionalSkipKeyboard(
+    'w:cardio_skip_pulse',
+    'w:cardio_cancel',
+    draft ? cardioCancelLabel(draft) : undefined
+  );
 
   if (viaEdit) {
     await ctx.editMessageText(text, { reply_markup });
@@ -196,7 +236,7 @@ export async function handleCardioPulseEntered(ctx: Context, text: string): Prom
   if (!Number.isFinite(pulse) || pulse <= 0) {
     await ctx.reply(
       'Введи число ударов в минуту больше нуля, например 140, либо нажми «⏭️ Пропустить»',
-      { reply_markup: optionalSkipKeyboard('w:cardio_skip_pulse', 'w:cardio_cancel') }
+      { reply_markup: optionalSkipKeyboard('w:cardio_skip_pulse', 'w:cardio_cancel', cardioCancelLabel(draft)) }
     );
     return;
   }
@@ -222,10 +262,10 @@ function renderCardioSummary(draft: DraftWorkout): string {
     inclinePercent: cardio.inclinePercent ?? null,
   });
 
-  return `✅ <b>Кардио добавлено</b>\n\n${details}`;
+  return `✅ Кардио добавлено\n\n${details}`;
 }
 
-async function finalizeCardioBlock(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+export async function finalizeCardioBlock(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
   const draft = getDraft(userId);
   if (!draft || !draft.cardio) return;
 
@@ -234,9 +274,9 @@ async function finalizeCardioBlock(ctx: Context, userId: number, viaEdit: boolea
   const reply_markup = draft.type === 'mixed' ? cardioDoneMixedKeyboard() : cardioDoneKeyboard();
 
   if (viaEdit) {
-    await ctx.editMessageText(text, { reply_markup, parse_mode: 'HTML' });
+    await ctx.editMessageText(text, { reply_markup });
   } else {
-    await ctx.reply(text, { reply_markup, parse_mode: 'HTML' });
+    await ctx.reply(text, { reply_markup });
   }
 }
 

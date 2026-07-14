@@ -9,7 +9,7 @@ async function sendProgress(ctx: Context, userId: number, exerciseName: string):
   const history = await getExerciseHistory(userId, exerciseName);
 
   if (history.length === 0) {
-    await ctx.reply(`Пока нет истории по «${exerciseName}».`);
+    await ctx.reply(`📭 Пока нет истории по «${exerciseName}».`);
     return;
   }
 
@@ -44,7 +44,7 @@ export function registerProgress(bot: Telegraf): void {
 
     const recentNames = await getLastExercisesByUser(userId, 6);
     if (recentNames.length === 0) {
-      await ctx.reply('Пока нет ни одного упражнения. Начни с /new_workout');
+      await ctx.reply('📭 Пока нет ни одного упражнения. Начни с /new_workout');
       return;
     }
 
@@ -52,7 +52,7 @@ export function registerProgress(bot: Telegraf): void {
       recentNames.map((name, index) => [Markup.button.callback(name, `p:${index}`)])
     ).reply_markup;
 
-    await ctx.reply('По какому упражнению показать прогресс?', { reply_markup: keyboard });
+    await ctx.reply('📈 По какому упражнению показать прогресс?', { reply_markup: keyboard });
   });
 
   bot.action(/^p:(\d+)$/, async (ctx: Context & { match: RegExpMatchArray }) => {

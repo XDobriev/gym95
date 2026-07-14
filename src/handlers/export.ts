@@ -31,15 +31,14 @@ function buildExportMarkdown(workouts: Workout[], exercises: Exercise[], cardioS
 
     const cardio = cardioByWorkout.get(workout.id);
     if (cardio) {
-      lines.push(
-        `- ${formatCardioInline({
-          activity: cardio.activity,
-          durationMinutes: workout.duration_minutes,
-          distanceKm: cardio.distance_km,
-          avgHeartRate: cardio.avg_heart_rate,
-          inclinePercent: cardio.incline_percent,
-        })}`
-      );
+      const cardioLine = formatCardioInline({
+        activity: cardio.activity,
+        durationMinutes: workout.duration_minutes,
+        distanceKm: cardio.distance_km,
+        avgHeartRate: cardio.avg_heart_rate,
+        inclinePercent: cardio.incline_percent,
+      }).split('\n').join(', ');
+      lines.push(`- ${cardioLine}`);
     }
 
     const body = lines.length > 0 ? lines.join('\n') : '- (без данных)';
@@ -58,7 +57,7 @@ export function registerExport(bot: Telegraf): void {
     const workouts = await getAllWorkoutsForExport(userId);
 
     if (workouts.length === 0) {
-      await ctx.reply('Пока нет тренировок для экспорта. Начни с /new_workout');
+      await ctx.reply('📭 Пока нет тренировок для экспорта. Начни с /new_workout');
       return;
     }
 

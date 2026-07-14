@@ -2,14 +2,24 @@ import { Markup } from 'telegraf';
 import { InlineKeyboardMarkup } from 'telegraf/typings/core/types/typegram';
 import { MuscleGroup } from '../../types/domain';
 
-const MUSCLE_GROUPS: { key: MuscleGroup; label: string }[] = [
-  { key: 'chest', label: 'Грудь' },
-  { key: 'back', label: 'Спина' },
-  { key: 'legs', label: 'Ноги' },
-  { key: 'shoulders', label: 'Плечи' },
-  { key: 'arms', label: 'Руки' },
-  { key: 'abs', label: 'Пресс' },
+const MUSCLE_GROUPS: { key: MuscleGroup; label: string; emoji: string }[] = [
+  { key: 'chest', label: 'Грудь', emoji: '🫸' },
+  { key: 'back', label: 'Спина', emoji: '🫷' },
+  { key: 'legs', label: 'Ноги', emoji: '🦵' },
+  { key: 'shoulders', label: 'Плечи', emoji: '🙌' },
+  { key: 'arms', label: 'Руки', emoji: '💪' },
+  { key: 'abs', label: 'Пресс', emoji: '🎯' },
 ];
+
+const BUTTON_LABEL_MAX_LENGTH = 24;
+
+// Обрезает длинные пользовательские названия для подписи кнопки — сама подпись
+// не участвует в поиске упражнения, callback data всегда хранит индекс.
+function truncateForButton(name: string): string {
+  return name.length > BUTTON_LABEL_MAX_LENGTH
+    ? `${name.slice(0, BUTTON_LABEL_MAX_LENGTH - 1)}…`
+    : name;
+}
 
 export function typeKeyboard(): InlineKeyboardMarkup {
   return Markup.inlineKeyboard([
@@ -21,13 +31,14 @@ export function typeKeyboard(): InlineKeyboardMarkup {
       Markup.button.callback('🏊 Бассейн', 'w:type:pool'),
       Markup.button.callback('🔀 Смешанная', 'w:type:mixed'),
     ],
+    [Markup.button.callback('❌ Отменить', 'w:cancel_workout')],
   ]).reply_markup;
 }
 
 export function exerciseNameKeyboard(recentNames: string[], showAddCardio = false): InlineKeyboardMarkup {
   const nameButtons = recentNames
     .slice(0, 6)
-    .map((name, index) => Markup.button.callback(name, `w:ex:${index}`));
+    .map((name, index) => Markup.button.callback(truncateForButton(name), `w:ex:${index}`));
 
   const rows: ReturnType<typeof Markup.button.callback>[][] = [];
   for (let i = 0; i < nameButtons.length; i += 2) {
@@ -45,7 +56,9 @@ export function exerciseNameKeyboard(recentNames: string[], showAddCardio = fals
 }
 
 export function muscleGroupKeyboard(): InlineKeyboardMarkup {
-  const groupButtons = MUSCLE_GROUPS.map((g) => Markup.button.callback(g.label, `w:muscle_group:${g.key}`));
+  const groupButtons = MUSCLE_GROUPS.map((g) =>
+    Markup.button.callback(`${g.emoji} ${g.label}`, `w:muscle_group:${g.key}`)
+  );
 
   const rows: ReturnType<typeof Markup.button.callback>[][] = [];
   for (let i = 0; i < groupButtons.length; i += 2) {
@@ -59,7 +72,9 @@ export function muscleGroupKeyboard(): InlineKeyboardMarkup {
 }
 
 export function groupExerciseKeyboard(names: string[]): InlineKeyboardMarkup {
-  const nameButtons = names.map((name, index) => Markup.button.callback(name, `w:group_ex:${index}`));
+  const nameButtons = names.map((name, index) =>
+    Markup.button.callback(truncateForButton(name), `w:group_ex:${index}`)
+  );
 
   const rows: ReturnType<typeof Markup.button.callback>[][] = [];
   for (let i = 0; i < nameButtons.length; i += 2) {
@@ -110,10 +125,14 @@ export function cardioDurationQuickKeyboard(): InlineKeyboardMarkup {
   ]).reply_markup;
 }
 
-export function optionalSkipKeyboard(skipAction: string, cancelAction?: string): InlineKeyboardMarkup {
+export function optionalSkipKeyboard(
+  skipAction: string,
+  cancelAction?: string,
+  cancelLabel = '❌ Отмена'
+): InlineKeyboardMarkup {
   const rows = [[Markup.button.callback('⏭️ Пропустить', skipAction)]];
   if (cancelAction) {
-    rows.push([Markup.button.callback('❌ Отмена кардио', cancelAction)]);
+    rows.push([Markup.button.callback(cancelLabel, cancelAction)]);
   }
   return Markup.inlineKeyboard(rows).reply_markup;
 }
