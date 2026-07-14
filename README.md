@@ -1,17 +1,27 @@
 # gym95 — дневник тренировок
 
+![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)
+![Telegraf](https://img.shields.io/badge/Telegraf-4.16-26A5E4?logo=telegram&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white)
+![Render](https://img.shields.io/badge/Deploy-Render.com-46E3B7?logo=render&logoColor=white)
+
 Личный Telegram-бот для ведения дневника тренировок. Node.js + TypeScript, Telegraf, Supabase (Postgres), деплой на Render.com (long polling, бесплатный тариф).
 
-## MVP
+## Функционал
 
 - `/start` — приветствие и список команд
-- `/new_workout` — пошаговая запись силовой тренировки через inline-кнопки, ввод подходов одной строкой (`40x12, 40x12, 42.5x10`)
+- `/new_workout` — запись тренировки через inline-кнопки:
+  - **силовая** — выбор упражнения из справочника по группам мышц (грудь, спина, ноги, плечи, руки, пресс) или своё название, ввод подходов одной строкой (`40x12, 40x12, 42.5x10`)
+  - **кардио** — бег, ходьба, велосипед, дорожка: длительность, дистанция, уклон, средний пульс
+  - **бассейн** — отдельный тип тренировки со своими параметрами
+  - **смешанная** — силовая + кардио/бассейн в одной тренировке
 - `/done` — завершить и сохранить текущую тренировку
 - `/history` — последние тренировки с пагинацией
 - `/progress <упражнение>` — история весов/повторений по упражнению
 - `/export` — вся история в markdown (для вставки в LLM-чат)
 
-Кардио/бассейн/смешанные тренировки и напоминания — второй этап (см. структуру `src/handlers/workout/cardioStep.ts` — заготовка).
+Напоминания — в планах.
 
 ## Локальный запуск
 
