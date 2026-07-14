@@ -25,6 +25,10 @@ function buildExportMarkdown(workouts: Workout[], exercises: Exercise[], cardioS
       .sort((a, b) => a.order_index - b.order_index)
       .map((ex) => `- ${ex.name}: ${formatSetsInline(ex.sets)}`);
 
+    if (workout.warmup_minutes) {
+      lines.unshift(`- 🔥 Разминка: ${workout.warmup_minutes} мин`);
+    }
+
     const cardio = cardioByWorkout.get(workout.id);
     if (cardio) {
       lines.push(
@@ -33,6 +37,7 @@ function buildExportMarkdown(workouts: Workout[], exercises: Exercise[], cardioS
           durationMinutes: workout.duration_minutes,
           distanceKm: cardio.distance_km,
           avgHeartRate: cardio.avg_heart_rate,
+          inclinePercent: cardio.incline_percent,
         })}`
       );
     }

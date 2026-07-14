@@ -7,6 +7,7 @@ export async function createWorkout(params: {
   date?: Date;
   durationMinutes?: number;
   notes?: string;
+  warmupMinutes?: number;
 }): Promise<Workout> {
   const { data, error } = await supabase
     .from('workouts')
@@ -16,6 +17,7 @@ export async function createWorkout(params: {
       date: (params.date ?? new Date()).toISOString(),
       duration_minutes: params.durationMinutes ?? null,
       notes: params.notes ?? null,
+      warmup_minutes: params.warmupMinutes ?? null,
     })
     .select()
     .single();

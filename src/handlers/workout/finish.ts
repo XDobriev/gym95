@@ -24,6 +24,7 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
     userId,
     type: draft.type,
     durationMinutes: draft.cardio?.durationMinutes,
+    warmupMinutes: draft.warmupMinutes,
   });
 
   for (const exercise of draft.exercises) {
@@ -43,10 +44,15 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
       distanceKm: draft.cardio.distanceKm ?? null,
       avgHeartRate: draft.cardio.avgHeartRate ?? null,
       avgPace,
+      inclinePercent: draft.cardio.inclinePercent ?? null,
     });
   }
 
   const sections: string[] = [];
+
+  if (draft.warmupMinutes !== undefined) {
+    sections.push(`🔥 Разминка: ${draft.warmupMinutes} мин`);
+  }
 
   if (draft.exercises.length > 0) {
     sections.push(
@@ -61,6 +67,7 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
         durationMinutes: draft.cardio.durationMinutes,
         distanceKm: draft.cardio.distanceKm ?? null,
         avgHeartRate: draft.cardio.avgHeartRate ?? null,
+        inclinePercent: draft.cardio.inclinePercent ?? null,
       })
     );
   }

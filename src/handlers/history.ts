@@ -30,6 +30,9 @@ async function renderHistoryPage(userId: number, offset: number): Promise<{ text
     const cardio = cardioByWorkout.get(workout.id);
 
     const parts: string[] = [];
+    if (workout.warmup_minutes) {
+      parts.push(`🔥 Разминка: ${workout.warmup_minutes} мин`);
+    }
     if (names.length > 0) {
       parts.push(`${names.join(', ')} (${names.length} упражнени${names.length === 1 ? 'е' : 'й'})`);
     }
@@ -40,6 +43,7 @@ async function renderHistoryPage(userId: number, offset: number): Promise<{ text
           durationMinutes: workout.duration_minutes,
           distanceKm: cardio.distance_km,
           avgHeartRate: cardio.avg_heart_rate,
+          inclinePercent: cardio.incline_percent,
         })
       );
     }

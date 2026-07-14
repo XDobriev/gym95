@@ -1,6 +1,53 @@
 import { Context } from 'telegraf';
-import { getDraft, setStep } from './state';
-import { enteringSetsKeyboard } from './keyboards';
+import { MuscleGroup } from '../../types/domain';
+import { getDraft, setStep, canAddCardio } from './state';
+import { getLastExercisesByUser } from '../../db/exercises';
+import { getCatalogByGroup, getUserCustomExercises, addCustomExerciseToCatalog } from '../../db/exerciseCatalog';
+import {
+  enteringSetsKeyboard,
+  exerciseNameKeyboard,
+  muscleGroupKeyboard,
+  groupExerciseKeyboard,
+} from './keyboards';
+
+async function promptSetsForExercise(ctx: Context, name: string, viaEdit: boolean): Promise<void> {
+  const text = `${name}. Введи подходы одной строкой, например:\n40x12, 40x12, 42.5x10`;
+  const reply_markup = enteringSetsKeyboard();
+
+  if (viaEdit) {
+    await ctx.editMessageText(text, { reply_markup });
+  } else {
+    await ctx.reply(text, { reply_markup });
+  }
+}
+
+// Рендерит исходный экран выбора упражнения (последние названия + доступ к справочнику).
+export async function renderExerciseMenu(
+  ctx: Context,
+  userId: number,
+  viaEdit = true,
+  prefixText = ''
+): Promise<void> {
+  const draft = getDraft(userId);
+  if (!draft) return;
+
+  setStep(userId, 'choosing_exercise_name');
+  const recentNames = await getLastExercisesByUser(userId, 6);
+  draft.recentExerciseNames = recentNames;
+
+  const text =
+    prefixText +
+    (recentNames.length > 0
+      ? 'Выбери упражнение из последних или введи новое:'
+      : 'Введи название первого упражнения (кнопка «✏️ Ввести своё название»):');
+  const reply_markup = exerciseNameKeyboard(recentNames, canAddCardio(draft));
+
+  if (viaEdit) {
+    await ctx.editMessageText(text, { reply_markup });
+  } else {
+    await ctx.reply(text, { reply_markup });
+  }
+}
 
 export async function handleExerciseChosenByIndex(ctx: Context, index: number): Promise<void> {
   const userId = ctx.from?.id;
@@ -17,11 +64,68 @@ export async function handleExerciseChosenByIndex(ctx: Context, index: number): 
 
   draft.currentExerciseName = name;
   setStep(userId, 'entering_sets');
+  await promptSetsForExercise(ctx, name, true);
+}
 
-  await ctx.editMessageText(
-    `${name}. Введи подходы одной строкой, например:\n40x12, 40x12, 42.5x10`,
-    { reply_markup: enteringSetsKeyboard() }
-  );
+export async function handleShowAllExercises(ctx: Context): Promise<void> {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  const draft = getDraft(userId);
+  if (!draft) return;
+
+  setStep(userId, 'choosing_muscle_group');
+  await ctx.editMessageText('Выбери группу мышц:', { reply_markup: muscleGroupKeyboard() });
+}
+
+export async function handleMuscleGroupChosen(ctx: Context, group: MuscleGroup | 'mine'): Promise<void> {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  const draft = getDraft(userId);
+  if (!draft) return;
+
+  const names = group === 'mine' ? await getUserCustomExercises(userId) : await getCatalogByGroup(userId, group);
+  draft.groupExerciseNames = names;
+  setStep(userId, 'choosing_exercise_in_group');
+
+  if (names.length === 0) {
+    await ctx.editMessageText('Пока пусто. Добавь упражнение через «✏️ Ввести своё название».', {
+      reply_markup: groupExerciseKeyboard([]),
+    });
+    return;
+  }
+
+  await ctx.editMessageText('Выбери упражнение:', { reply_markup: groupExerciseKeyboard(names) });
+}
+
+export async function handleExerciseChosenFromGroup(ctx: Context, index: number): Promise<void> {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  const draft = getDraft(userId);
+  if (!draft) return;
+
+  const name = draft.groupExerciseNames?.[index];
+  if (!name) {
+    await ctx.answerCbQuery('Не нашёл это упражнение, попробуй ещё раз');
+    return;
+  }
+
+  draft.currentExerciseName = name;
+  setStep(userId, 'entering_sets');
+  await promptSetsForExercise(ctx, name, true);
+}
+
+export async function handleBackToMuscleGroups(ctx: Context): Promise<void> {
+  await handleShowAllExercises(ctx);
+}
+
+export async function handleBackToExerciseMenu(ctx: Context): Promise<void> {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  await renderExerciseMenu(ctx, userId, true);
 }
 
 export async function handleCustomExercisePrompt(ctx: Context): Promise<void> {
@@ -48,11 +152,9 @@ export async function handleCustomExerciseNameEntered(ctx: Context, name: string
     return;
   }
 
+  await addCustomExerciseToCatalog(userId, trimmed);
+
   draft.currentExerciseName = trimmed;
   setStep(userId, 'entering_sets');
-
-  await ctx.reply(
-    `${trimmed}. Введи подходы одной строкой, например:\n40x12, 40x12, 42.5x10`,
-    { reply_markup: enteringSetsKeyboard() }
-  );
+  await promptSetsForExercise(ctx, trimmed, false);
 }

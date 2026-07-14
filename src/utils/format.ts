@@ -46,12 +46,16 @@ const CARDIO_ACTIVITY_LABELS: Record<CardioActivity, string> = {
   treadmill: 'Беговая дорожка',
   pool: 'Бассейн',
   bike: 'Велосипед',
+  running: 'Бег',
+  walking: 'Ходьба',
 };
 
 const CARDIO_ACTIVITY_EMOJI: Record<CardioActivity, string> = {
-  treadmill: '🏃',
+  treadmill: '🎽',
   pool: '🏊',
   bike: '🚴',
+  running: '🏃',
+  walking: '🚶',
 };
 
 export function formatCardioInline(cardio: {
@@ -59,10 +63,12 @@ export function formatCardioInline(cardio: {
   durationMinutes: number | null;
   distanceKm: number | null;
   avgHeartRate: number | null;
+  inclinePercent?: number | null;
 }): string {
   const parts = [`${CARDIO_ACTIVITY_EMOJI[cardio.activity]} ${CARDIO_ACTIVITY_LABELS[cardio.activity]}`];
   if (cardio.durationMinutes !== null) parts.push(`🕒 ${cardio.durationMinutes} мин`);
   if (cardio.distanceKm !== null) parts.push(`📏 ${cardio.distanceKm} км`);
+  if (cardio.inclinePercent !== null && cardio.inclinePercent !== undefined) parts.push(`⛰️ уклон ${cardio.inclinePercent}%`);
   if (cardio.avgHeartRate !== null) parts.push(`❤️ ${cardio.avgHeartRate} уд/мин`);
   return parts.join(', ');
 }

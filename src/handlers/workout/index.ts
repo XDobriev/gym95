@@ -2,11 +2,16 @@ import { Telegraf, Context } from 'telegraf';
 import { WorkoutType } from '../../types/domain';
 import { getDraft, startDraft, clearDraft } from './state';
 import { typeKeyboard, resumeOrRestartKeyboard } from './keyboards';
-import { handleTypeChosen } from './typeStep';
+import { handleTypeChosen, handleWarmupMinutesEntered, handleWarmupSkip } from './typeStep';
 import {
   handleExerciseChosenByIndex,
   handleCustomExercisePrompt,
   handleCustomExerciseNameEntered,
+  handleShowAllExercises,
+  handleMuscleGroupChosen,
+  handleExerciseChosenFromGroup,
+  handleBackToMuscleGroups,
+  handleBackToExerciseMenu,
 } from './exerciseNameStep';
 import {
   handleSetsTextEntered,
@@ -19,8 +24,11 @@ import {
   promptCardioActivity,
   handleCardioActivityChosen,
   handleCardioDurationEntered,
+  handleCardioDurationDefault,
   handleCardioDistanceEntered,
   handleCardioDistanceSkip,
+  handleCardioInclineEntered,
+  handleCardioInclineSkip,
   handleCardioPulseEntered,
   handleCardioPulseSkip,
   handleCardioCancel,
@@ -104,6 +112,36 @@ export function registerWorkout(bot: Telegraf): void {
     await handleCustomExercisePrompt(ctx);
   });
 
+  bot.action('w:all_exercises', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleShowAllExercises(ctx);
+  });
+
+  bot.action(/^w:muscle_group:(chest|back|legs|shoulders|arms|abs|mine)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleMuscleGroupChosen(ctx, ctx.match[1] as Parameters<typeof handleMuscleGroupChosen>[1]);
+  });
+
+  bot.action(/^w:group_ex:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleExerciseChosenFromGroup(ctx, parseInt(ctx.match[1], 10));
+  });
+
+  bot.action('w:back_to_exercise_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleBackToExerciseMenu(ctx);
+  });
+
+  bot.action('w:muscle_group_back', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleBackToMuscleGroups(ctx);
+  });
+
+  bot.action('w:warmup_skip', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleWarmupSkip(ctx);
+  });
+
   bot.action('w:add_more_sets', async (ctx) => {
     await ctx.answerCbQuery();
     await handleAddMoreSets(ctx);
@@ -129,14 +167,24 @@ export function registerWorkout(bot: Telegraf): void {
     await promptCardioActivity(ctx);
   });
 
-  bot.action(/^w:cardio_activity:(treadmill|bike)$/, async (ctx) => {
+  bot.action(/^w:cardio_activity:(treadmill|bike|running|walking)$/, async (ctx) => {
     await ctx.answerCbQuery();
-    await handleCardioActivityChosen(ctx, ctx.match[1] as 'treadmill' | 'bike');
+    await handleCardioActivityChosen(ctx, ctx.match[1] as 'treadmill' | 'bike' | 'running' | 'walking');
+  });
+
+  bot.action('w:cardio_duration_default', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCardioDurationDefault(ctx);
   });
 
   bot.action('w:cardio_skip_distance', async (ctx) => {
     await ctx.answerCbQuery();
     await handleCardioDistanceSkip(ctx);
+  });
+
+  bot.action('w:cardio_skip_incline', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCardioInclineSkip(ctx);
   });
 
   bot.action('w:cardio_skip_pulse', async (ctx) => {
@@ -174,6 +222,11 @@ export function registerWorkout(bot: Telegraf): void {
 
     const text = 'text' in ctx.message ? ctx.message.text : '';
 
+    if (draft.step === 'entering_warmup') {
+      await handleWarmupMinutesEntered(ctx, text);
+      return;
+    }
+
     if (draft.step === 'entering_custom_exercise_name') {
       await handleCustomExerciseNameEntered(ctx, text);
       return;
@@ -191,6 +244,11 @@ export function registerWorkout(bot: Telegraf): void {
 
     if (draft.step === 'entering_cardio_distance') {
       await handleCardioDistanceEntered(ctx, text);
+      return;
+    }
+
+    if (draft.step === 'entering_cardio_incline') {
+      await handleCardioInclineEntered(ctx, text);
       return;
     }
 

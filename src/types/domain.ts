@@ -7,6 +7,7 @@ export interface Workout {
   type: WorkoutType;
   duration_minutes: number | null;
   notes: string | null;
+  warmup_minutes: number | null;
 }
 
 export interface SetEntry {
@@ -22,7 +23,7 @@ export interface Exercise {
   order_index: number;
 }
 
-export type CardioActivity = 'treadmill' | 'pool' | 'bike';
+export type CardioActivity = 'treadmill' | 'pool' | 'bike' | 'running' | 'walking';
 
 export interface CardioSession {
   id: string;
@@ -31,4 +32,7 @@ export interface CardioSession {
   distance_km: number | null;
   avg_heart_rate: number | null;
   avg_pace: string | null;
+  incline_percent: number | null;
 }
+
+export type MuscleGroup = 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'abs';

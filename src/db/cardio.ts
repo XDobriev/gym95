@@ -7,6 +7,7 @@ export async function addCardioSession(params: {
   distanceKm: number | null;
   avgHeartRate: number | null;
   avgPace: string | null;
+  inclinePercent: number | null;
 }): Promise<CardioSession> {
   const { data, error } = await supabase
     .from('cardio_sessions')
@@ -16,6 +17,7 @@ export async function addCardioSession(params: {
       distance_km: params.distanceKm,
       avg_heart_rate: params.avgHeartRate,
       avg_pace: params.avgPace,
+      incline_percent: params.inclinePercent,
     })
     .select()
     .single();

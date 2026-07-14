@@ -41,3 +41,44 @@ create table if not exists cardio_sessions (
 
 create index if not exists idx_cardio_workout
   on cardio_sessions (workout_id);
+
+-- Справочник упражнений: user_id null = общий дефолтный список, иначе — личное упражнение пользователя
+create table if not exists exercise_catalog (
+  id uuid primary key default gen_random_uuid(),
+  user_id bigint null,
+  name text not null,
+  muscle_group text null check (muscle_group is null or muscle_group in ('chest','back','legs','shoulders','arms','abs')),
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists idx_exercise_catalog_default_name
+  on exercise_catalog (lower(name)) where user_id is null;
+
+create unique index if not exists idx_exercise_catalog_user_name
+  on exercise_catalog (user_id, lower(name)) where user_id is not null;
+
+create index if not exists idx_exercise_catalog_group
+  on exercise_catalog (muscle_group);
+
+insert into exercise_catalog (name, muscle_group) values
+  ('Жим штанги лёжа','chest'), ('Жим гантелей лёжа','chest'), ('Жим штанги на наклонной скамье','chest'),
+  ('Разводка гантелей лёжа','chest'), ('Отжимания на брусьях','chest'), ('Кроссовер','chest'),
+  ('Тяга верхнего блока','back'), ('Тяга штанги в наклоне','back'), ('Тяга гантели в наклоне','back'),
+  ('Румынская тяга','back'), ('Становая тяга','back'), ('Гиперэкстензия','back'), ('Подтягивания','back'),
+  ('Приседания со штангой','legs'), ('Жим ногами','legs'), ('Выпады с гантелями','legs'),
+  ('Разгибание ног в тренажёре','legs'), ('Сгибание ног в тренажёре','legs'), ('Подъём на носки','legs'),
+  ('Жим штанги стоя','shoulders'), ('Жим гантелей сидя','shoulders'), ('Махи гантелями в стороны','shoulders'),
+  ('Махи гантелями в наклоне','shoulders'), ('Тяга штанги к подбородку','shoulders'),
+  ('Подъём штанги на бицепс','arms'), ('Подъём гантелей на бицепс (молот)','arms'), ('Французский жим','arms'),
+  ('Разгибание рук на блоке','arms'), ('Отжимания узким хватом','arms'),
+  ('Скручивания','abs'), ('Подъём ног в висе','abs'), ('Планка','abs'), ('Скручивания на блоке','abs')
+on conflict (lower(name)) where user_id is null do nothing;
+
+-- Кардио: добавляем бег/ходьбу и уклон
+alter table cardio_sessions drop constraint if exists cardio_sessions_activity_check;
+alter table cardio_sessions add constraint cardio_sessions_activity_check
+  check (activity in ('treadmill', 'pool', 'bike', 'running', 'walking'));
+alter table cardio_sessions add column if not exists incline_percent numeric null;
+
+-- Разминка/растяжка как часть тренировки
+alter table workouts add column if not exists warmup_minutes int null;
