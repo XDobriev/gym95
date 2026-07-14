@@ -1,7 +1,8 @@
 import { Telegraf, Context, Markup } from 'telegraf';
 import { getRecentWorkouts, countWorkouts } from '../db/workouts';
 import { getExercisesForWorkouts } from '../db/exercises';
-import { formatDateShortRu, formatWorkoutTypeWithEmoji } from '../utils/format';
+import { getCardioSessionsForWorkouts } from '../db/cardio';
+import { formatCardioInline, formatDateShortRu, formatWorkoutTypeWithEmoji } from '../utils/format';
 
 const PAGE_SIZE = 5;
 
@@ -15,19 +16,36 @@ async function renderHistoryPage(userId: number, offset: number): Promise<{ text
     return { text: 'Пока нет ни одной тренировки. Начни с /new_workout', hasMore: false };
   }
 
-  const exercises = await getExercisesForWorkouts(workouts.map((w) => w.id));
+  const workoutIds = workouts.map((w) => w.id);
+  const [exercises, cardioSessions] = await Promise.all([
+    getExercisesForWorkouts(workoutIds),
+    getCardioSessionsForWorkouts(workoutIds),
+  ]);
+  const cardioByWorkout = new Map(cardioSessions.map((c) => [c.workout_id, c]));
 
   const blocks = workouts.map((workout) => {
     const names = exercises
       .filter((ex) => ex.workout_id === workout.id)
       .map((ex) => ex.name);
+    const cardio = cardioByWorkout.get(workout.id);
+
+    const parts: string[] = [];
+    if (names.length > 0) {
+      parts.push(`${names.join(', ')} (${names.length} упражнени${names.length === 1 ? 'е' : 'й'})`);
+    }
+    if (cardio) {
+      parts.push(
+        formatCardioInline({
+          activity: cardio.activity,
+          durationMinutes: workout.duration_minutes,
+          distanceKm: cardio.distance_km,
+          avgHeartRate: cardio.avg_heart_rate,
+        })
+      );
+    }
 
     const summary =
-      names.length > 0
-        ? `${names.join(', ')} (${names.length} упражнени${names.length === 1 ? 'е' : 'й'})`
-        : workout.duration_minutes
-        ? `${workout.duration_minutes} мин`
-        : '—';
+      parts.length > 0 ? parts.join('\n') : workout.duration_minutes ? `${workout.duration_minutes} мин` : '—';
 
     return `📅 ${formatDateShortRu(workout.date)} — ${formatWorkoutTypeWithEmoji(workout.type)}\n${summary}`;
   });

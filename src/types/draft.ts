@@ -1,4 +1,4 @@
-import { WorkoutType } from './domain';
+import { CardioActivity, WorkoutType } from './domain';
 
 export type WorkoutStep =
   | 'choosing_type'
@@ -6,9 +6,11 @@ export type WorkoutStep =
   | 'entering_custom_exercise_name'
   | 'entering_sets'
   | 'exercise_saved_menu'
+  | 'choosing_cardio_activity'
   | 'entering_cardio_duration'
   | 'entering_cardio_distance'
-  | 'entering_cardio_pulse';
+  | 'entering_cardio_pulse'
+  | 'cardio_saved_menu';
 
 export interface DraftSet {
   weight: number;
@@ -22,6 +24,7 @@ export interface DraftExercise {
 }
 
 export interface DraftCardio {
+  activity?: CardioActivity;
   durationMinutes?: number;
   distanceKm?: number;
   avgHeartRate?: number;

@@ -1,6 +1,6 @@
 import { Context } from 'telegraf';
 import { DraftWorkout } from '../../types/draft';
-import { getDraft, setStep } from './state';
+import { getDraft, setStep, canAddCardio } from './state';
 import { parseSetsLine } from '../../utils/setsParser';
 import { formatSetsInline } from '../../utils/format';
 import { enteringSetsKeyboard, exerciseSavedMenuKeyboard, exerciseNameKeyboard } from './keyboards';
@@ -50,7 +50,9 @@ export async function handleSetsTextEntered(ctx: Context, text: string): Promise
   upsertCurrentExercise(draft, draft.currentExerciseName, result.sets);
   setStep(userId, 'exercise_saved_menu');
 
-  await ctx.reply(renderExerciseSavedMenu(draft), { reply_markup: exerciseSavedMenuKeyboard() });
+  await ctx.reply(renderExerciseSavedMenu(draft), {
+    reply_markup: exerciseSavedMenuKeyboard(canAddCardio(draft)),
+  });
 }
 
 export async function handleAddMoreSets(ctx: Context): Promise<void> {
@@ -84,7 +86,9 @@ export async function handleRepeatLast(ctx: Context): Promise<void> {
 
   lastExercise.sets.push({ ...lastSet });
 
-  await ctx.editMessageText(renderExerciseSavedMenu(draft), { reply_markup: exerciseSavedMenuKeyboard() });
+  await ctx.editMessageText(renderExerciseSavedMenu(draft), {
+    reply_markup: exerciseSavedMenuKeyboard(canAddCardio(draft)),
+  });
 }
 
 export async function handleNextExercise(ctx: Context): Promise<void> {
@@ -102,7 +106,7 @@ export async function handleNextExercise(ctx: Context): Promise<void> {
   draft.recentExerciseNames = recentNames;
 
   await ctx.editMessageText('Выбери следующее упражнение или введи новое:', {
-    reply_markup: exerciseNameKeyboard(recentNames),
+    reply_markup: exerciseNameKeyboard(recentNames, canAddCardio(draft)),
   });
 }
 
@@ -118,6 +122,6 @@ export async function handleCancelExercise(ctx: Context): Promise<void> {
   setStep(userId, 'choosing_exercise_name');
 
   await ctx.editMessageText('Ок, отменил. Выбери упражнение:', {
-    reply_markup: exerciseNameKeyboard(draft.recentExerciseNames ?? []),
+    reply_markup: exerciseNameKeyboard(draft.recentExerciseNames ?? [], canAddCardio(draft)),
   });
 }

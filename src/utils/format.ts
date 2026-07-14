@@ -1,4 +1,4 @@
-import { SetEntry, WorkoutType } from '../types/domain';
+import { CardioActivity, SetEntry, WorkoutType } from '../types/domain';
 
 export function formatSet(set: SetEntry): string {
   return set.weight > 0 ? `${set.weight}×${set.reps}` : `×${set.reps}`;
@@ -40,4 +40,29 @@ export function formatDateShortRu(isoDate: string): string {
 
 export function formatDateIsoDay(isoDate: string): string {
   return new Date(isoDate).toISOString().slice(0, 10);
+}
+
+const CARDIO_ACTIVITY_LABELS: Record<CardioActivity, string> = {
+  treadmill: 'Беговая дорожка',
+  pool: 'Бассейн',
+  bike: 'Велосипед',
+};
+
+const CARDIO_ACTIVITY_EMOJI: Record<CardioActivity, string> = {
+  treadmill: '🏃',
+  pool: '🏊',
+  bike: '🚴',
+};
+
+export function formatCardioInline(cardio: {
+  activity: CardioActivity;
+  durationMinutes: number | null;
+  distanceKm: number | null;
+  avgHeartRate: number | null;
+}): string {
+  const parts = [`${CARDIO_ACTIVITY_EMOJI[cardio.activity]} ${CARDIO_ACTIVITY_LABELS[cardio.activity]}`];
+  if (cardio.durationMinutes !== null) parts.push(`🕒 ${cardio.durationMinutes} мин`);
+  if (cardio.distanceKm !== null) parts.push(`📏 ${cardio.distanceKm} км`);
+  if (cardio.avgHeartRate !== null) parts.push(`❤️ ${cardio.avgHeartRate} уд/мин`);
+  return parts.join(', ');
 }

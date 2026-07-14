@@ -1,7 +1,9 @@
 import { getDraft, clearDraft } from './state';
 import { createWorkout } from '../../db/workouts';
 import { addExercise } from '../../db/exercises';
-import { formatSetsInline } from '../../utils/format';
+import { addCardioSession } from '../../db/cardio';
+import { computeAvgPace } from '../../utils/cardio';
+import { formatCardioInline, formatSetsInline } from '../../utils/format';
 
 export type FinishResult =
   | { ok: true; text: string }
@@ -10,12 +12,19 @@ export type FinishResult =
 export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
   const draft = getDraft(userId);
 
-  if (!draft || !draft.type || draft.exercises.length === 0) {
+  const hasExercises = (draft?.exercises.length ?? 0) > 0;
+  const hasCardio = draft?.cardio?.durationMinutes !== undefined;
+
+  if (!draft || !draft.type || (!hasExercises && !hasCardio)) {
     clearDraft(userId);
-    return { ok: false, text: 'Тренировка без упражнений не сохранена.' };
+    return { ok: false, text: 'Тренировка без данных не сохранена.' };
   }
 
-  const workout = await createWorkout({ userId, type: draft.type });
+  const workout = await createWorkout({
+    userId,
+    type: draft.type,
+    durationMinutes: draft.cardio?.durationMinutes,
+  });
 
   for (const exercise of draft.exercises) {
     await addExercise({
@@ -26,14 +35,40 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
     });
   }
 
-  const summary = draft.exercises
-    .map((ex) => `- ${ex.name}: ${formatSetsInline(ex.sets)}`)
-    .join('\n');
+  if (draft.cardio && draft.cardio.activity && draft.cardio.durationMinutes !== undefined) {
+    const avgPace = computeAvgPace(draft.cardio.durationMinutes, draft.cardio.distanceKm ?? null);
+    await addCardioSession({
+      workoutId: workout.id,
+      activity: draft.cardio.activity,
+      distanceKm: draft.cardio.distanceKm ?? null,
+      avgHeartRate: draft.cardio.avgHeartRate ?? null,
+      avgPace,
+    });
+  }
+
+  const sections: string[] = [];
+
+  if (draft.exercises.length > 0) {
+    sections.push(
+      draft.exercises.map((ex) => `- ${ex.name}: ${formatSetsInline(ex.sets)}`).join('\n')
+    );
+  }
+
+  if (draft.cardio && draft.cardio.activity && draft.cardio.durationMinutes !== undefined) {
+    sections.push(
+      formatCardioInline({
+        activity: draft.cardio.activity,
+        durationMinutes: draft.cardio.durationMinutes,
+        distanceKm: draft.cardio.distanceKm ?? null,
+        avgHeartRate: draft.cardio.avgHeartRate ?? null,
+      })
+    );
+  }
 
   clearDraft(userId);
 
   return {
     ok: true,
-    text: `✅ Тренировка сохранена!\n\n${summary}\n\nПосмотреть историю — /history`,
+    text: `✅ Тренировка сохранена!\n\n${sections.join('\n\n')}\n\nПосмотреть историю — /history`,
   };
 }

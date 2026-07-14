@@ -15,6 +15,16 @@ import {
   handleNextExercise,
   handleCancelExercise,
 } from './setsInputStep';
+import {
+  promptCardioActivity,
+  handleCardioActivityChosen,
+  handleCardioDurationEntered,
+  handleCardioDistanceEntered,
+  handleCardioDistanceSkip,
+  handleCardioPulseEntered,
+  handleCardioPulseSkip,
+  handleCardioCancel,
+} from './cardioStep';
 import { saveDraftWorkout } from './finish';
 
 async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
@@ -114,6 +124,31 @@ export function registerWorkout(bot: Telegraf): void {
     await handleCancelExercise(ctx);
   });
 
+  bot.action('w:add_cardio', async (ctx) => {
+    await ctx.answerCbQuery();
+    await promptCardioActivity(ctx);
+  });
+
+  bot.action(/^w:cardio_activity:(treadmill|bike)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCardioActivityChosen(ctx, ctx.match[1] as 'treadmill' | 'bike');
+  });
+
+  bot.action('w:cardio_skip_distance', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCardioDistanceSkip(ctx);
+  });
+
+  bot.action('w:cardio_skip_pulse', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCardioPulseSkip(ctx);
+  });
+
+  bot.action('w:cardio_cancel', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCardioCancel(ctx);
+  });
+
   bot.action('w:finish', async (ctx) => {
     await ctx.answerCbQuery();
     await handleFinishAction(ctx);
@@ -146,6 +181,21 @@ export function registerWorkout(bot: Telegraf): void {
 
     if (draft.step === 'entering_sets') {
       await handleSetsTextEntered(ctx, text);
+      return;
+    }
+
+    if (draft.step === 'entering_cardio_duration') {
+      await handleCardioDurationEntered(ctx, text);
+      return;
+    }
+
+    if (draft.step === 'entering_cardio_distance') {
+      await handleCardioDistanceEntered(ctx, text);
+      return;
+    }
+
+    if (draft.step === 'entering_cardio_pulse') {
+      await handleCardioPulseEntered(ctx, text);
       return;
     }
 

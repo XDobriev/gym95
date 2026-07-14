@@ -1,12 +1,13 @@
 import { Telegraf } from 'telegraf';
 import { getAllWorkoutsForExport } from '../db/workouts';
 import { getExercisesForWorkouts } from '../db/exercises';
-import { Exercise, Workout } from '../types/domain';
-import { formatDateIsoDay, formatSetsInline, formatWorkoutTypeRu } from '../utils/format';
+import { getCardioSessionsForWorkouts } from '../db/cardio';
+import { CardioSession, Exercise, Workout } from '../types/domain';
+import { formatCardioInline, formatDateIsoDay, formatSetsInline, formatWorkoutTypeRu } from '../utils/format';
 
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 
-function buildExportMarkdown(workouts: Workout[], exercises: Exercise[]): string {
+function buildExportMarkdown(workouts: Workout[], exercises: Exercise[], cardioSessions: CardioSession[]): string {
   const exercisesByWorkout = new Map<string, Exercise[]>();
   for (const exercise of exercises) {
     const list = exercisesByWorkout.get(exercise.workout_id) ?? [];
@@ -14,15 +15,29 @@ function buildExportMarkdown(workouts: Workout[], exercises: Exercise[]): string
     exercisesByWorkout.set(exercise.workout_id, list);
   }
 
+  const cardioByWorkout = new Map(cardioSessions.map((c) => [c.workout_id, c]));
+
   const sections = workouts.map((workout) => {
     const durationSuffix = workout.duration_minutes ? ` (${workout.duration_minutes} мин)` : '';
     const header = `## ${formatDateIsoDay(workout.date)} — ${formatWorkoutTypeRu(workout.type)}${durationSuffix}`;
 
-    const exerciseLines = (exercisesByWorkout.get(workout.id) ?? [])
+    const lines = (exercisesByWorkout.get(workout.id) ?? [])
       .sort((a, b) => a.order_index - b.order_index)
       .map((ex) => `- ${ex.name}: ${formatSetsInline(ex.sets)}`);
 
-    const body = exerciseLines.length > 0 ? exerciseLines.join('\n') : '- (без упражнений)';
+    const cardio = cardioByWorkout.get(workout.id);
+    if (cardio) {
+      lines.push(
+        `- ${formatCardioInline({
+          activity: cardio.activity,
+          durationMinutes: workout.duration_minutes,
+          distanceKm: cardio.distance_km,
+          avgHeartRate: cardio.avg_heart_rate,
+        })}`
+      );
+    }
+
+    const body = lines.length > 0 ? lines.join('\n') : '- (без данных)';
 
     return `${header}\n${body}`;
   });
@@ -42,8 +57,12 @@ export function registerExport(bot: Telegraf): void {
       return;
     }
 
-    const exercises = await getExercisesForWorkouts(workouts.map((w) => w.id));
-    const markdown = buildExportMarkdown(workouts, exercises);
+    const workoutIds = workouts.map((w) => w.id);
+    const [exercises, cardioSessions] = await Promise.all([
+      getExercisesForWorkouts(workoutIds),
+      getCardioSessionsForWorkouts(workoutIds),
+    ]);
+    const markdown = buildExportMarkdown(workouts, exercises, cardioSessions);
 
     if (markdown.length <= TELEGRAM_MESSAGE_LIMIT) {
       await ctx.reply(markdown);

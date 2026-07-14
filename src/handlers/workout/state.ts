@@ -42,6 +42,11 @@ export function setLastMessageId(userId: number, messageId: number): void {
   if (draft) draft.lastMessageId = messageId;
 }
 
+// Кнопка "Добавить кардио" доступна только в смешанной тренировке и только пока кардио-блок ещё не сохранён.
+export function canAddCardio(draft: DraftWorkout): boolean {
+  return draft.type === 'mixed' && !draft.cardio;
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [userId, draft] of drafts) {

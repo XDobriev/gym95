@@ -1,10 +1,8 @@
 import { Context } from 'telegraf';
 import { WorkoutType } from '../../types/domain';
-import { getDraft, setType, setStep } from './state';
+import { getDraft, setType, setStep, canAddCardio } from './state';
 import { getLastExercisesByUser } from '../../db/exercises';
-import { exerciseNameKeyboard } from './keyboards';
-
-const STUB_TYPES: WorkoutType[] = ['cardio', 'pool', 'mixed'];
+import { exerciseNameKeyboard, activityKeyboard } from './keyboards';
 
 export async function handleTypeChosen(ctx: Context, type: WorkoutType): Promise<void> {
   const userId = ctx.from?.id;
@@ -15,11 +13,16 @@ export async function handleTypeChosen(ctx: Context, type: WorkoutType): Promise
 
   setType(userId, type);
 
-  if (STUB_TYPES.includes(type)) {
-    await ctx.editMessageText(
-      'Учёт кардио/бассейна/смешанных тренировок появится на следующем этапе. ' +
-        'Пока доступна только силовая тренировка — запусти /new_workout и выбери «Силовая».'
-    );
+  if (type === 'cardio') {
+    setStep(userId, 'choosing_cardio_activity');
+    await ctx.editMessageText('Выбери активность:', { reply_markup: activityKeyboard() });
+    return;
+  }
+
+  if (type === 'pool') {
+    draft.cardio = { activity: 'pool' };
+    setStep(userId, 'entering_cardio_duration');
+    await ctx.editMessageText('🕒 Сколько минут длилось плавание? Введи число:');
     return;
   }
 
@@ -31,6 +34,6 @@ export async function handleTypeChosen(ctx: Context, type: WorkoutType): Promise
     recentNames.length > 0
       ? 'Выбери упражнение из последних или введи новое:'
       : 'Введи название первого упражнения (кнопка «✏️ Ввести своё название»):',
-    { reply_markup: exerciseNameKeyboard(recentNames) }
+    { reply_markup: exerciseNameKeyboard(recentNames, canAddCardio(draft)) }
   );
 }
