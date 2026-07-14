@@ -82,3 +82,14 @@ alter table cardio_sessions add column if not exists incline_percent numeric nul
 
 -- Разминка/растяжка как часть тренировки
 alter table workouts add column if not exists warmup_minutes int null;
+
+-- Настройки напоминаний пользователя (1 строка на пользователя, upsert по user_id)
+create table if not exists user_settings (
+  user_id bigint primary key,
+  reminders_enabled boolean not null default false,
+  reminder_time text null check (reminder_time is null or reminder_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+  last_reminder_sent_date date null
+);
+
+create index if not exists idx_user_settings_reminder_time
+  on user_settings (reminder_time) where reminders_enabled = true;
