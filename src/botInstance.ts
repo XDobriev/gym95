@@ -6,6 +6,7 @@ import { registerProgress } from './handlers/progress';
 import { registerExport } from './handlers/export';
 import { registerWorkout } from './handlers/workout';
 import { registerSettings } from './handlers/settings';
+import { registerWebApp } from './handlers/webapp';
 
 export const bot = new Telegraf(config.BOT_TOKEN);
 
@@ -15,6 +16,7 @@ registerHistory(bot);
 registerProgress(bot);
 registerExport(bot);
 registerSettings(bot);
+registerWebApp(bot);
 
 bot.catch((err, ctx) => {
   console.error(`Ошибка обработки апдейта ${ctx.updateType}:`, err);

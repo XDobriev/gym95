@@ -5,3 +5,5 @@ dist/
 .impeccable/
 supabase/.temp/
 function.zip
+.vercel/
+*.tsbuildinfo
