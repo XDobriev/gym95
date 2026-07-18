@@ -37,6 +37,7 @@ export interface SummaryResponse {
   weekStreak: number;
   weekVolumeKg: number;
   weekWorkouts: number;
+  weekGoal: number;
 }
 
 export interface ProgressPoint {

@@ -139,6 +139,10 @@ export async function getProgress(userId: number, exerciseName: string): Promise
   });
 }
 
+// Недельная цель по числу тренировок. Пока константа; позже — из профиля
+// пользователя (тогда меняется только эта строка, контракт SummaryResponse готов).
+const WEEKLY_GOAL_DEFAULT = 3;
+
 // --- Сводка: всего тренировок, недельный стрик, объём и число за текущую неделю ---
 export async function getSummary(userId: number): Promise<SummaryResponse> {
   const { data: workoutRows, error } = await supabase
@@ -159,7 +163,7 @@ export async function getSummary(userId: number): Promise<SummaryResponse> {
   const weekWorkouts = thisWeekIds.length;
   const weekVolumeKg = await weekVolume(thisWeekIds);
 
-  return { totalWorkouts, weekStreak, weekVolumeKg, weekWorkouts };
+  return { totalWorkouts, weekStreak, weekVolumeKg, weekWorkouts, weekGoal: WEEKLY_GOAL_DEFAULT };
 }
 
 async function weekVolume(workoutIds: string[]): Promise<number> {
