@@ -131,11 +131,17 @@ export async function getProgress(userId: number, exerciseName: string): Promise
     .order('date', { foreignTable: 'workouts', ascending: true });
   if (error) throw new Error(`getProgress: ${error.message}`);
 
-  return ((data ?? []) as unknown as { sets: SetEntry[]; workouts: { date: string }[] }[]).map((row) => {
+  // Supabase для embed «многие-к-одному» (exercises → workouts) возвращает
+  // объект, а не массив. Нормализуем на случай обеих форм, чтобы не упасть на .date.
+  return ((data ?? []) as unknown as {
+    sets: SetEntry[];
+    workouts: { date: string } | { date: string }[];
+  }[]).map((row) => {
+    const workout = Array.isArray(row.workouts) ? row.workouts[0] : row.workouts;
     const sets = row.sets ?? [];
     const maxWeight = sets.length ? Math.max(...sets.map((s) => s.weight)) : 0;
     const volumeKg = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
-    return { date: row.workouts[0].date, maxWeight, volumeKg };
+    return { date: workout?.date ?? '', maxWeight, volumeKg };
   });
 }
 
