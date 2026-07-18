@@ -4,15 +4,17 @@ import { api, ApiError } from '../api';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { Loading, ErrorState, EmptyState } from '../components/States';
 import { monthKey, monthLabel } from '../format';
+import { WorkoutEditScreen } from './WorkoutEditScreen';
 
 const PAGE_SIZE = 20;
 
-export function HistoryScreen() {
+export function HistoryScreen({ onWorkoutsChanged }: { onWorkoutsChanged?: () => void }) {
   const [workouts, setWorkouts] = useState<WorkoutDTO[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutDTO | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
 
@@ -56,6 +58,39 @@ export function HistoryScreen() {
     return () => observer.disconnect();
   }, [hasMore, status, workouts.length, loadPage]);
 
+  // После правки состав/дата тренировки могли измениться (в т.ч. порядок сортировки
+  // по дате) — проще перезагрузить уже подгруженный кусок истории, чем править
+  // элемент точечно и городить дублирующую логику парсинга подходов на фронте.
+  const refreshLoadedPage = useCallback(async () => {
+    const count = Math.max(workouts.length, PAGE_SIZE);
+    const page = await api.history(0, count);
+    setWorkouts(page.workouts);
+    setHasMore(page.hasMore);
+  }, [workouts.length]);
+
+  const handleSaved = async () => {
+    setEditingWorkout(null);
+    await refreshLoadedPage();
+    onWorkoutsChanged?.();
+  };
+
+  const handleDeleted = async () => {
+    setEditingWorkout(null);
+    await refreshLoadedPage();
+    onWorkoutsChanged?.();
+  };
+
+  if (editingWorkout) {
+    return (
+      <WorkoutEditScreen
+        workout={editingWorkout}
+        onCancel={() => setEditingWorkout(null)}
+        onSaved={handleSaved}
+        onDeleted={handleDeleted}
+      />
+    );
+  }
+
   if (status === 'loading') return <Loading />;
   if (status === 'error') return <ErrorState title="Ошибка" message={errorMsg} />;
   if (workouts.length === 0) {
@@ -78,7 +113,7 @@ export function HistoryScreen() {
         return (
           <div key={w.id}>
             {showMonth && <div className="month-label">{monthLabel(w.date)}</div>}
-            <WorkoutCard workout={w} />
+            <WorkoutCard workout={w} onEdit={setEditingWorkout} />
           </div>
         );
       })}

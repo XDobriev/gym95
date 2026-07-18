@@ -1,5 +1,6 @@
 import { supabase } from './client';
 import { Exercise, SetEntry } from '../types/domain';
+import { getWorkoutOwned } from './workouts';
 
 export async function addExercise(params: {
   workoutId: string;
@@ -44,6 +45,71 @@ export async function getExercisesForWorkouts(workoutIds: string[]): Promise<Exe
 
   if (error) throw new Error(`getExercisesForWorkouts: ${error.message}`);
   return (data ?? []) as Exercise[];
+}
+
+// Полностью заменяет состав упражнений тренировки (для PUT из Mini App): сносит
+// старые строки и вставляет новые с последовательным order_index. Владельца
+// тренировки вызывающий обязан проверить заранее (getWorkoutOwned).
+// Не транзакционно (как и создание в finish.ts) — на однопользовательском боте
+// окно рассинхрона пренебрежимо; вставка идёт одним bulk-запросом.
+export async function replaceWorkoutExercises(
+  workoutId: string,
+  exercises: { name: string; sets: SetEntry[] }[]
+): Promise<void> {
+  const { error: delError } = await supabase.from('exercises').delete().eq('workout_id', workoutId);
+  if (delError) throw new Error(`replaceWorkoutExercises/delete: ${delError.message}`);
+
+  if (exercises.length === 0) return;
+
+  const rows = exercises.map((ex, index) => ({
+    workout_id: workoutId,
+    name: ex.name,
+    sets: ex.sets,
+    order_index: index,
+  }));
+  const { error: insError } = await supabase.from('exercises').insert(rows);
+  if (insError) throw new Error(`replaceWorkoutExercises/insert: ${insError.message}`);
+}
+
+// Точечная замена подходов одного упражнения (для бота). Owner-проверка через
+// родительскую тренировку. false — если тренировка чужая/удалена.
+export async function updateExerciseSets(
+  userId: number,
+  workoutId: string,
+  exerciseId: string,
+  sets: SetEntry[]
+): Promise<boolean> {
+  const owner = await getWorkoutOwned(userId, workoutId);
+  if (!owner) return false;
+
+  const { error } = await supabase
+    .from('exercises')
+    .update({ sets })
+    .eq('id', exerciseId)
+    .eq('workout_id', workoutId);
+
+  if (error) throw new Error(`updateExerciseSets: ${error.message}`);
+  return true;
+}
+
+// Удаляет одно упражнение из тренировки (для бота). Owner-проверка через
+// родительскую тренировку.
+export async function deleteExercise(
+  userId: number,
+  workoutId: string,
+  exerciseId: string
+): Promise<boolean> {
+  const owner = await getWorkoutOwned(userId, workoutId);
+  if (!owner) return false;
+
+  const { error } = await supabase
+    .from('exercises')
+    .delete()
+    .eq('id', exerciseId)
+    .eq('workout_id', workoutId);
+
+  if (error) throw new Error(`deleteExercise: ${error.message}`);
+  return true;
 }
 
 // Последние уникальные названия упражнений пользователя, отсортированные по недавности использования.

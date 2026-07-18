@@ -3,6 +3,13 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateInitData, AuthError, AuthedUser } from './initData';
 import { getHistoryPage, getExerciseNames, getProgress, getSummary } from './queries';
+import { validateWorkoutInput } from './validateWorkout';
+import { updateWorkout, deleteWorkoutForUser } from './mutations';
+
+const MAX_BODY_BYTES = 64 * 1024; // страховка от гигантского тела запроса
+
+// /api/workout/<id> — id тренировки (uuid) в конце пути.
+const WORKOUT_ID_PATH = /^\/api\/workout\/([^/]+)$/;
 
 // Статика собранного Mini App. tsc компилирует src/ → dist/, а бот на Render
 // запускается из корня репозитория, поэтому webapp/dist лежит рядом с process.cwd().
@@ -34,6 +41,22 @@ function authOrThrow(req: IncomingMessage): AuthedUser {
   return validateInitData(initData);
 }
 
+// Читает тело запроса как JSON с ограничением по размеру. null — если тело пустое
+// или не является объектом (валидацию содержимого делает validateWorkoutInput).
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buf = chunk as Buffer;
+    total += buf.length;
+    if (total > MAX_BODY_BYTES) throw new Error('Тело запроса слишком большое');
+    chunks.push(buf);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8').trim();
+  if (raw === '') return null;
+  return JSON.parse(raw);
+}
+
 async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   let user: AuthedUser;
   try {
@@ -44,7 +67,22 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     return;
   }
 
+  const method = (req.method ?? 'GET').toUpperCase();
+
   try {
+    // --- Мутации тренировки: PUT/DELETE /api/workout/:id ---
+    const workoutMatch = WORKOUT_ID_PATH.exec(url.pathname);
+    if (workoutMatch) {
+      const workoutId = decodeURIComponent(workoutMatch[1]);
+      await handleWorkoutMutation(req, res, method, user.userId, workoutId);
+      return;
+    }
+
+    if (method !== 'GET') {
+      sendJson(res, 405, { error: 'Метод не поддерживается' });
+      return;
+    }
+
     switch (url.pathname) {
       case '/api/hello':
         sendJson(res, 200, { userId: user.userId, firstName: user.firstName });
@@ -83,6 +121,50 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     console.error('Ошибка API Mini App:', err);
     sendJson(res, 500, { error: err instanceof Error ? err.message : 'Ошибка сервера' });
   }
+}
+
+async function handleWorkoutMutation(
+  req: IncomingMessage,
+  res: ServerResponse,
+  method: string,
+  userId: number,
+  workoutId: string
+): Promise<void> {
+  if (method === 'DELETE') {
+    const result = await deleteWorkoutForUser(userId, workoutId);
+    if (!result.ok) {
+      sendJson(res, result.status, { error: result.error });
+      return;
+    }
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (method === 'PUT') {
+    let body: unknown;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      sendJson(res, 400, { error: 'Не удалось разобрать тело запроса' });
+      return;
+    }
+
+    const validated = validateWorkoutInput(body);
+    if (!validated.ok) {
+      sendJson(res, 400, { error: validated.error });
+      return;
+    }
+
+    const result = await updateWorkout(userId, workoutId, validated.value);
+    if (!result.ok) {
+      sendJson(res, result.status, { error: result.error });
+      return;
+    }
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  sendJson(res, 405, { error: 'Метод не поддерживается' });
 }
 
 async function serveStatic(res: ServerResponse, pathname: string): Promise<void> {

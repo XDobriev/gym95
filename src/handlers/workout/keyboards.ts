@@ -150,6 +150,84 @@ export function cardioDoneMixedKeyboard(): InlineKeyboardMarkup {
   ]).reply_markup;
 }
 
+export function deleteConfirmKeyboard(workoutId: string, offset: number): InlineKeyboardMarkup {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('✅ Да, удалить', `wdc:${workoutId}:${offset}`),
+      Markup.button.callback('❌ Отмена', `wdx:${workoutId}:${offset}`),
+    ],
+  ]).reply_markup;
+}
+
+// Меню точечной правки: по кнопке на скалярное поле + пара кнопок (правка/удаление)
+// на каждое упражнение + кардио, если есть. Добавление упражнений и смена их порядка
+// в боте не поддерживаются (это делается в Mini App) — здесь только то, что укладывается
+// в один текстовый ответ.
+export function editMenuKeyboard(
+  workoutId: string,
+  offset: number,
+  exerciseNames: string[],
+  hasCardio: boolean
+): InlineKeyboardMarkup {
+  const rows: ReturnType<typeof Markup.button.callback>[][] = [
+    [
+      Markup.button.callback('📅 Дата', `wef:date:${workoutId}:${offset}`),
+      Markup.button.callback('🏷 Тип', `wef:type:${workoutId}:${offset}`),
+    ],
+    [
+      Markup.button.callback('🕒 Длительность', `wef:duration:${workoutId}:${offset}`),
+      Markup.button.callback('🔥 Разминка', `wef:warmup:${workoutId}:${offset}`),
+    ],
+    [Markup.button.callback('📝 Заметки', `wef:notes:${workoutId}:${offset}`)],
+  ];
+
+  exerciseNames.forEach((name, index) => {
+    rows.push([
+      Markup.button.callback(`✏️ ${truncateForButton(name)}`, `wex:${index}:${workoutId}:${offset}`),
+      Markup.button.callback('🗑', `wexd:${index}:${workoutId}:${offset}`),
+    ]);
+  });
+
+  if (hasCardio) {
+    rows.push([Markup.button.callback('🏃 Кардио', `wef:cardio:${workoutId}:${offset}`)]);
+  }
+
+  rows.push([Markup.button.callback('⬅️ Закрыть', `wecl:${workoutId}:${offset}`)]);
+
+  return Markup.inlineKeyboard(rows).reply_markup;
+}
+
+export function editTypeKeyboard(workoutId: string, offset: number): InlineKeyboardMarkup {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('🏋️ Силовая', `wet:strength:${workoutId}:${offset}`),
+      Markup.button.callback('🏃 Кардио', `wet:cardio:${workoutId}:${offset}`),
+    ],
+    [
+      Markup.button.callback('🏊 Бассейн', `wet:pool:${workoutId}:${offset}`),
+      Markup.button.callback('🔀 Смешанная', `wet:mixed:${workoutId}:${offset}`),
+    ],
+    [Markup.button.callback('❌ Отмена', `we:${workoutId}:${offset}`)],
+  ]).reply_markup;
+}
+
+// Кнопка отмены под текстовым промптом правки — возвращает в меню правки (не в карточку),
+// чтобы можно было сразу попробовать другое поле.
+export function editCancelKeyboard(workoutId: string, offset: number): InlineKeyboardMarkup {
+  return Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', `we:${workoutId}:${offset}`)]]).reply_markup;
+}
+
+export function editCardioSkipKeyboard(
+  skipAction: string,
+  workoutId: string,
+  offset: number
+): InlineKeyboardMarkup {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('⏭️ Оставить как есть', skipAction)],
+    [Markup.button.callback('❌ Отмена', `we:${workoutId}:${offset}`)],
+  ]).reply_markup;
+}
+
 export function resumeOrRestartKeyboard(): InlineKeyboardMarkup {
   return Markup.inlineKeyboard([
     [

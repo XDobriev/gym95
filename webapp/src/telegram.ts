@@ -26,7 +26,9 @@ export interface TelegramWebApp {
   HapticFeedback?: {
     impactOccurred: (style: 'light' | 'medium' | 'heavy') => void;
     selectionChanged: () => void;
+    notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
   };
+  showConfirm?: (message: string, callback: (confirmed: boolean) => void) => void;
 }
 
 declare global {
@@ -60,4 +62,19 @@ let cachedHaptic: TelegramWebApp['HapticFeedback'] | undefined;
 export function haptic(style: 'light' | 'medium' | 'heavy' = 'light'): void {
   cachedHaptic ??= getWebApp()?.HapticFeedback;
   cachedHaptic?.impactOccurred(style);
+}
+
+export function notifyHaptic(type: 'error' | 'success' | 'warning'): void {
+  cachedHaptic ??= getWebApp()?.HapticFeedback;
+  cachedHaptic?.notificationOccurred(type);
+}
+
+// Нативный confirm Telegram, если доступен (webApp.showConfirm) — иначе браузерный.
+// В деве (вне Telegram) window.confirm тоже работает, так что удаление тестируемо.
+export function confirmDialog(message: string): Promise<boolean> {
+  const webApp = getWebApp();
+  if (webApp?.showConfirm) {
+    return new Promise((resolve) => webApp.showConfirm!(message, resolve));
+  }
+  return Promise.resolve(window.confirm(message));
 }

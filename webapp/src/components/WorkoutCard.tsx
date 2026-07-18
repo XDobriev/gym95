@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, type MouseEventHandler } from 'react';
 import type { WorkoutDTO } from '../../shared/types';
 import { TYPE_LABEL, TYPE_EMOJI, CARDIO_LABEL, formatSetsInline, formatDateDDMM, pluralizeRu } from '../format';
 import { haptic } from '../telegram';
 
-export function WorkoutCard({ workout }: { workout: WorkoutDTO }) {
+export function WorkoutCard({ workout, onEdit }: { workout: WorkoutDTO; onEdit: (workout: WorkoutDTO) => void }) {
   const [open, setOpen] = useState(false);
   const hasDetails = workout.exercises.length > 0 || workout.cardio.length > 0 || !!workout.notes;
 
@@ -11,6 +11,12 @@ export function WorkoutCard({ workout }: { workout: WorkoutDTO }) {
     if (!hasDetails) return;
     haptic('light');
     setOpen((v) => !v);
+  };
+
+  const handleEdit: MouseEventHandler = (e) => {
+    e.stopPropagation();
+    haptic('light');
+    onEdit(workout);
   };
 
   const exCount = workout.exercises.length;
@@ -23,6 +29,9 @@ export function WorkoutCard({ workout }: { workout: WorkoutDTO }) {
           {TYPE_LABEL[workout.type]}
         </span>
         <span className="card-date">{formatDateDDMM(workout.date)}</span>
+        <button className="card-edit-btn" onClick={handleEdit} aria-label="Изменить тренировку">
+          ✏️
+        </button>
       </div>
 
       <div className="card-meta">
@@ -34,7 +43,7 @@ export function WorkoutCard({ workout }: { workout: WorkoutDTO }) {
           </span>
         )}
         {workout.cardio.map((c, i) => (
-          <span key={i} className="chip muted">
+          <span key={i} className="chip chip-cardio">
             {CARDIO_LABEL[c.activity]}
             {c.distance_km != null ? ` · ${c.distance_km} км` : ''}
           </span>

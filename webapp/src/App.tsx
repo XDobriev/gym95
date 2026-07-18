@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import type { SummaryResponse } from '../shared/types';
 import { api, ApiError } from './api';
 import { getWebApp, haptic } from './telegram';
@@ -45,6 +45,16 @@ export function App() {
     setTab(next);
   };
 
+  // Правка/удаление тренировки меняет totalWorkouts/streak/объём — перетягиваем
+  // сводку сразу, чтобы плашка наверху не показывала устаревшие числа.
+  const refreshSummary = useCallback(async () => {
+    try {
+      setSummary(await api.summary());
+    } catch {
+      // сводка необязательна для работы экрана — молча оставляем прежнее значение
+    }
+  }, []);
+
   if (status === 'loading') {
     return (
       <div className="app">
@@ -85,7 +95,7 @@ export function App() {
         {summary && <SummaryBar summary={summary} />}
 
         {tab === 'history' ? (
-          <HistoryScreen />
+          <HistoryScreen onWorkoutsChanged={refreshSummary} />
         ) : (
           <Suspense fallback={<Loading />}>
             <ProgressScreen />

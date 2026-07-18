@@ -58,3 +58,28 @@ export interface ProgressResponse {
   exercise: string;
   points: ProgressPoint[];
 }
+
+// --- Редактирование (PUT /api/workout/:id) ---
+// Подходы шлём строкой ("40x12, 42.5x10") — сервер парсит тем же parseSetsLine,
+// что и мастер создания в боте: одна точка правды для формата.
+export interface ExerciseInput {
+  name: string;
+  setsText: string;
+}
+
+export interface CardioInput {
+  activity: CardioActivity;
+  distanceKm: number | null;
+  avgHeartRate: number | null;
+  inclinePercent: number | null;
+}
+
+export interface WorkoutUpdateRequest {
+  date: string; // yyyy-mm-dd или ISO
+  type: WorkoutType;
+  durationMinutes: number | null;
+  warmupMinutes: number | null;
+  notes: string | null;
+  exercises: ExerciseInput[];
+  cardio: CardioInput[];
+}

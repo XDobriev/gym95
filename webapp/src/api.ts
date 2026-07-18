@@ -1,5 +1,5 @@
 import { getWebApp } from './telegram';
-import type { HistoryResponse, ProgressResponse, SummaryResponse } from '../shared/types';
+import type { HistoryResponse, ProgressResponse, SummaryResponse, WorkoutUpdateRequest } from '../shared/types';
 
 // В деве initData пустой (открыто не из Telegram) — тогда API вернёт 401,
 // и мы покажем понятное сообщение «открой через Telegram».
@@ -15,6 +15,24 @@ async function get<T>(path: string): Promise<T> {
     throw new ApiError(res.status, body || res.statusText);
   }
   return res.json() as Promise<T>;
+}
+
+async function send(path: string, method: 'PUT' | 'DELETE', body?: unknown): Promise<void> {
+  const res = await fetch(path, {
+    method,
+    headers: { ...initDataHeader(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // тело не JSON — оставляем statusText
+    }
+    throw new ApiError(res.status, message);
+  }
 }
 
 export class ApiError extends Error {
@@ -37,4 +55,7 @@ export const api = {
   exercises: () => get<{ names: string[] }>('/api/exercises'),
   progress: (exercise: string) =>
     get<ProgressResponse>(`/api/progress?exercise=${encodeURIComponent(exercise)}`),
+  updateWorkout: (id: string, body: WorkoutUpdateRequest) =>
+    send(`/api/workout/${encodeURIComponent(id)}`, 'PUT', body),
+  deleteWorkout: (id: string) => send(`/api/workout/${encodeURIComponent(id)}`, 'DELETE'),
 };

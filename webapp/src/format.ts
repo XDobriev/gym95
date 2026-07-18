@@ -44,6 +44,25 @@ export function formatDateDDMM(iso: string): string {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// yyyy-mm-dd (локальная дата) — значение для <input type="date">.
+export function toDateInputValue(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Собирает ISO-момент из даты формы (yyyy-mm-dd) и времени суток исходной
+// тренировки — чтобы правка одной только даты не обнуляла время создания записи.
+export function combineDateInputWithOriginalTime(dateInputValue: string, originalIso: string): string {
+  const [y, m, d] = dateInputValue.split('-').map(Number);
+  const original = new Date(originalIso);
+  const result = new Date(original);
+  result.setFullYear(y, m - 1, d);
+  return result.toISOString();
+}
+
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',

@@ -5,6 +5,7 @@ import { registerHistory } from './handlers/history';
 import { registerProgress } from './handlers/progress';
 import { registerExport } from './handlers/export';
 import { registerWorkout } from './handlers/workout';
+import { registerWorkoutEdit } from './handlers/workout/editStep';
 import { registerSettings } from './handlers/settings';
 import { registerWebApp } from './handlers/webapp';
 
@@ -12,6 +13,7 @@ export const bot = new Telegraf(config.BOT_TOKEN);
 
 registerStart(bot);
 registerWorkout(bot);
+registerWorkoutEdit(bot);
 registerHistory(bot);
 registerProgress(bot);
 registerExport(bot);
