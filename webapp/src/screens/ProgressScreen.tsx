@@ -102,6 +102,15 @@ export function ProgressScreen() {
             <div className="chart-title">Максимальный вес, кг</div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: -18 }}>
+                <defs>
+                  <filter id="gym95-line-glow" x="-60%" y="-60%" width="220%" height="220%">
+                    <feGaussianBlur stdDeviation="2.5" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.18)" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -130,10 +139,11 @@ export function ProgressScreen() {
                 <Line
                   type="monotone"
                   dataKey="maxWeight"
-                  stroke="#12c46a"
-                  strokeWidth={3}
-                  dot={{ r: 3, fill: '#12c46a' }}
-                  activeDot={{ r: 5 }}
+                  stroke="var(--lime-ink)"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: 'var(--lime-ink)', strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: 'var(--lime-ink)' }}
+                  filter="url(#gym95-line-glow)"
                 />
               </LineChart>
             </ResponsiveContainer>
