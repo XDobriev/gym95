@@ -29,6 +29,24 @@ export async function setupWebAppMenuButton(bot: Telegraf): Promise<void> {
   }
 }
 
+// Регистрирует список команд бота (показывается в меню по «/»). Вызывается на старте.
+export async function setupBotCommands(bot: Telegraf): Promise<void> {
+  try {
+    await bot.telegram.setMyCommands([
+      { command: 'new_workout', description: 'Новая тренировка' },
+      { command: 'done', description: 'Завершить и сохранить тренировку' },
+      { command: 'history', description: 'История тренировок' },
+      { command: 'progress', description: 'Прогресс по упражнению' },
+      { command: 'app', description: 'Открыть дневник (Mini App)' },
+      { command: 'settings', description: 'Напоминания' },
+      { command: 'export', description: 'Экспорт истории в markdown' },
+    ]);
+    console.log('Команды бота зарегистрированы');
+  } catch (err) {
+    console.error('Не удалось зарегистрировать команды бота:', err);
+  }
+}
+
 // Команда /app — присылает кнопку запуска Mini App (дублирует menu-кнопку,
 // удобно кинуть ссылку на дневник прямо в переписке).
 export function registerWebApp(bot: Telegraf): void {

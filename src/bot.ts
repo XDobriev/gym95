@@ -2,7 +2,7 @@ import { createServer } from 'http';
 import { TelegramError } from 'telegraf';
 import { bot } from './botInstance';
 import { startReminderCron } from './cron/reminders';
-import { setupWebAppMenuButton } from './handlers/webapp';
+import { setupWebAppMenuButton, setupBotCommands } from './handlers/webapp';
 import { handleRequest } from './webapp/server';
 
 const MAX_LAUNCH_ATTEMPTS = 5;
@@ -23,6 +23,7 @@ async function launchWithRetry(attempt = 1): Promise<void> {
       console.log(`gym95 bot запущен (long polling) как @${bot.botInfo?.username}`);
       startReminderCron(bot);
       void setupWebAppMenuButton(bot);
+      void setupBotCommands(bot);
     });
   } catch (err) {
     const isConflict = err instanceof TelegramError && err.code === 409;

@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import type { SummaryResponse } from '../shared/types';
 import { api, ApiError } from './api';
 import { getWebApp, haptic } from './telegram';
 import { SummaryBar } from './components/SummaryBar';
 import { HistoryScreen } from './screens/HistoryScreen';
-import { ProgressScreen } from './screens/ProgressScreen';
 import { Loading, ErrorState } from './components/States';
+
+// Экран прогресса тянет за собой Recharts (~400 КБ) — грузим его отдельным
+// чанком только при открытии вкладки, чтобы первый экран (История) был лёгким.
+const ProgressScreen = lazy(() =>
+  import('./screens/ProgressScreen').then((m) => ({ default: m.ProgressScreen }))
+);
 
 type Tab = 'history' | 'progress';
 
@@ -79,7 +84,13 @@ export function App() {
 
         {summary && <SummaryBar summary={summary} />}
 
-        {tab === 'history' ? <HistoryScreen /> : <ProgressScreen />}
+        {tab === 'history' ? (
+          <HistoryScreen />
+        ) : (
+          <Suspense fallback={<Loading />}>
+            <ProgressScreen />
+          </Suspense>
+        )}
       </div>
 
       <nav className="tabbar">
