@@ -3,6 +3,7 @@ import { getSettings, upsertSettings, UserSettings } from '../db/settings';
 import { pluralizeRu } from '../utils/format';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const GOAL_REGEX = /^[1-7]$/;
 const waitingForTime = new Set<number>();
 const waitingForGoal = new Set<number>();
 
@@ -81,11 +82,11 @@ export function registerSettings(bot: Telegraf): void {
 
     if (waitingForGoal.has(userId)) {
       const text = 'text' in ctx.message ? ctx.message.text.trim() : '';
-      const n = Number(text);
-      if (!Number.isInteger(n) || n < 1 || n > 7) {
+      if (!GOAL_REGEX.test(text)) {
         await ctx.reply('Не понял число. Пришли целое от 1 до 7, например 4.');
         return;
       }
+      const n = Number(text);
 
       waitingForGoal.delete(userId);
       const settings = await upsertSettings(userId, { week_goal: n });
