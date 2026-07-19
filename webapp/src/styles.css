@@ -17,6 +17,7 @@
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   --glow: none; /* box-shadow-значение; свечение включаем только в тёмной теме */
   --icon-glow: none; /* аналог --glow, но в синтаксисе filter: drop-shadow() не принимает none как аргумент */
+  --celebrate-glow-peak: none; /* пик celebration-анимации; как --glow, включается только в тёмной теме */
 
   --font-display: 'Anton', sans-serif;
   --font-label: 'Barlow Semi Condensed', sans-serif;
@@ -29,6 +30,7 @@
   --teal: #00e0a4;
   --glow: 0 0 12px rgba(201, 255, 46, 0.5);
   --icon-glow: drop-shadow(0 0 6px rgba(201, 255, 46, 0.65));
+  --celebrate-glow-peak: 0 0 22px rgba(201, 255, 46, 0.65);
 }
 
 /* График прогресса (recharts): SVG-фильтр свечения на линии задан в
@@ -157,7 +159,7 @@ body {
     box-shadow: var(--glow);
   }
   35% {
-    box-shadow: 0 0 22px rgba(201, 255, 46, 0.65);
+    box-shadow: var(--celebrate-glow-peak);
   }
 }
 @keyframes celebrateSweep {
