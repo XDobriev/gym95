@@ -1,5 +1,11 @@
 import { getWebApp } from './telegram';
-import type { HistoryResponse, ProgressResponse, SummaryResponse, WorkoutUpdateRequest } from '../shared/types';
+import type {
+  HistoryResponse,
+  ProgressResponse,
+  SummaryResponse,
+  VolumeHistoryResponse,
+  WorkoutUpdateRequest,
+} from '../shared/types';
 
 // В деве initData пустой (открыто не из Telegram) — тогда API вернёт 401,
 // и мы покажем понятное сообщение «открой через Telegram».
@@ -55,6 +61,7 @@ export const api = {
   exercises: () => get<{ names: string[] }>('/api/exercises'),
   progress: (exercise: string) =>
     get<ProgressResponse>(`/api/progress?exercise=${encodeURIComponent(exercise)}`),
+  volumeHistory: () => get<VolumeHistoryResponse>('/api/volume-history'),
   updateWorkout: (id: string, body: WorkoutUpdateRequest) =>
     send(`/api/workout/${encodeURIComponent(id)}`, 'PUT', body),
   deleteWorkout: (id: string) => send(`/api/workout/${encodeURIComponent(id)}`, 'DELETE'),
