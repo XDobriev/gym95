@@ -93,3 +93,7 @@ create table if not exists user_settings (
 
 create index if not exists idx_user_settings_reminder_time
   on user_settings (reminder_time) where reminders_enabled = true;
+
+-- Персональная недельная цель по числу тренировок (1-7), дефолт 3
+alter table user_settings add column if not exists week_goal int not null default 3
+  check (week_goal between 1 and 7);
