@@ -1,13 +1,16 @@
 import { Telegraf, Markup } from 'telegraf';
 import { getSettings, upsertSettings, UserSettings } from '../db/settings';
+import { pluralizeRu } from '../utils/format';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const waitingForTime = new Set<number>();
+const waitingForGoal = new Set<number>();
 
 function settingsText(s: UserSettings): string {
   const status = s.reminders_enabled ? 'включены' : 'выключены';
   const time = s.reminder_time ?? 'не задано';
-  return `⚙️ Настройки\n\nНапоминания: ${status}\nВремя проверки: ${time} (Europe/Moscow)`;
+  const goalWord = pluralizeRu(s.week_goal, ['тренировка', 'тренировки', 'тренировок']);
+  return `⚙️ Настройки\n\nНапоминания: ${status}\nВремя проверки: ${time} (Europe/Moscow)\nЦель недели: ${s.week_goal} ${goalWord}`;
 }
 
 function settingsKeyboard(s: UserSettings) {
@@ -19,6 +22,7 @@ function settingsKeyboard(s: UserSettings) {
       ),
     ],
     [Markup.button.callback('⏰ Изменить время', 's:time')],
+    [Markup.button.callback('🎯 Изменить цель', 's:goal')],
   ]).reply_markup;
 }
 
@@ -28,6 +32,7 @@ export function registerSettings(bot: Telegraf): void {
     if (!userId) return;
 
     waitingForTime.delete(userId);
+    waitingForGoal.delete(userId);
     const settings = await getSettings(userId);
     await ctx.reply(settingsText(settings), { reply_markup: settingsKeyboard(settings) });
   });
@@ -55,13 +60,43 @@ export function registerSettings(bot: Telegraf): void {
     const userId = ctx.from?.id;
     if (!userId) return;
 
+    waitingForGoal.delete(userId);
     waitingForTime.add(userId);
     await ctx.reply('Напиши время в формате ЧЧ:ММ (например, 19:30). Часовой пояс — Europe/Moscow.');
   });
 
+  bot.action('s:goal', async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    waitingForTime.delete(userId);
+    waitingForGoal.add(userId);
+    await ctx.reply('Сколько тренировок в неделю — цель? Число от 1 до 7.');
+  });
+
   bot.on('text', async (ctx, next) => {
     const userId = ctx.from?.id;
-    if (!userId || !waitingForTime.has(userId)) {
+    if (!userId) return next();
+
+    if (waitingForGoal.has(userId)) {
+      const text = 'text' in ctx.message ? ctx.message.text.trim() : '';
+      const n = Number(text);
+      if (!Number.isInteger(n) || n < 1 || n > 7) {
+        await ctx.reply('Не понял число. Пришли целое от 1 до 7, например 4.');
+        return;
+      }
+
+      waitingForGoal.delete(userId);
+      const settings = await upsertSettings(userId, { week_goal: n });
+      const goalWord = pluralizeRu(n, ['тренировка', 'тренировки', 'тренировок']);
+      await ctx.reply(`✅ Готово! Цель недели: ${n} ${goalWord}.`, {
+        reply_markup: settingsKeyboard(settings),
+      });
+      return;
+    }
+
+    if (!waitingForTime.has(userId)) {
       return next();
     }
 
