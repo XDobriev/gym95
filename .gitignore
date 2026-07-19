@@ -8,3 +8,4 @@ function.zip
 .vercel/
 *.tsbuildinfo
 design-concepts/
+.superpowers/
