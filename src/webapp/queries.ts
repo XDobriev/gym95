@@ -1,4 +1,5 @@
 import { supabase } from '../db/client';
+import { getSettings } from '../db/settings';
 import { SetEntry } from '../types/domain';
 import {
   WorkoutDTO,
@@ -6,6 +7,7 @@ import {
   CardioDTO,
   SummaryResponse,
   ProgressPoint,
+  VolumeHistoryPoint,
 } from '../types/webapp';
 
 interface WorkoutRow {
@@ -145,10 +147,6 @@ export async function getProgress(userId: number, exerciseName: string): Promise
   });
 }
 
-// Недельная цель по числу тренировок. Пока константа; позже — из профиля
-// пользователя (тогда меняется только эта строка, контракт SummaryResponse готов).
-const WEEKLY_GOAL_DEFAULT = 3;
-
 // --- Сводка: всего тренировок, недельный стрик, объём и число за текущую неделю ---
 export async function getSummary(userId: number): Promise<SummaryResponse> {
   const { data: workoutRows, error } = await supabase
@@ -167,9 +165,9 @@ export async function getSummary(userId: number): Promise<SummaryResponse> {
   const thisWeekKey = mondayKey(new Date());
   const thisWeekIds = rows.filter((r) => mondayKey(new Date(r.date)) === thisWeekKey).map((r) => r.id);
   const weekWorkouts = thisWeekIds.length;
-  const weekVolumeKg = await weekVolume(thisWeekIds);
+  const [weekVolumeKg, settings] = await Promise.all([weekVolume(thisWeekIds), getSettings(userId)]);
 
-  return { totalWorkouts, weekStreak, weekVolumeKg, weekWorkouts, weekGoal: WEEKLY_GOAL_DEFAULT };
+  return { totalWorkouts, weekStreak, weekVolumeKg, weekWorkouts, weekGoal: settings.week_goal };
 }
 
 async function weekVolume(workoutIds: string[]): Promise<number> {
@@ -208,4 +206,44 @@ function computeWeekStreak(weekKeys: Set<string>): number {
     cursor.setUTCDate(cursor.getUTCDate() - 7);
   }
   return streak;
+}
+
+// --- История тоннажа по неделям для графика на «Прогрессе» (zero-fill) ---
+export async function getVolumeHistory(userId: number, weeks = 12): Promise<VolumeHistoryPoint[]> {
+  const weekStarts = lastMondays(weeks); // по возрастанию, [0] — самая старая неделя
+  const earliest = weekStarts[0];
+
+  const { data, error } = await supabase
+    .from('exercises')
+    .select('sets, workouts!inner(user_id, date)')
+    .eq('workouts.user_id', userId)
+    .gte('workouts.date', earliest)
+    .order('date', { foreignTable: 'workouts', ascending: true });
+  if (error) throw new Error(`getVolumeHistory: ${error.message}`);
+
+  const totals = new Map<string, number>(weekStarts.map((w) => [w, 0]));
+  for (const row of (data ?? []) as unknown as {
+    sets: SetEntry[];
+    workouts: { date: string } | { date: string }[];
+  }[]) {
+    const workout = Array.isArray(row.workouts) ? row.workouts[0] : row.workouts;
+    if (!workout?.date) continue;
+    const key = mondayKey(new Date(workout.date));
+    if (!totals.has(key)) continue; // защита от пограничных строк вне запрошенного окна
+    const volume = (row.sets ?? []).reduce((sum, s) => sum + s.weight * s.reps, 0);
+    totals.set(key, (totals.get(key) ?? 0) + volume);
+  }
+
+  return weekStarts.map((weekStart) => ({ weekStart, volumeKg: Math.round(totals.get(weekStart) ?? 0) }));
+}
+
+// Понедельники последних `weeks` недель включительно текущей, по возрастанию дат.
+function lastMondays(weeks: number): string[] {
+  const cursor = new Date(mondayKey(new Date()) + 'T00:00:00Z');
+  const result: string[] = [];
+  for (let i = 0; i < weeks; i++) {
+    result.unshift(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() - 7);
+  }
+  return result;
 }
