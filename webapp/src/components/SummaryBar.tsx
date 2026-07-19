@@ -45,7 +45,7 @@ export function SummaryBar({ summary }: { summary: SummaryResponse }) {
     }
     setCelebrating(true);
     notifyHaptic('success');
-  }, [reached, summary.weekWorkouts, summary.weekGoal]);
+  }, [reached]);
 
   return (
     <div className="stat-row">
