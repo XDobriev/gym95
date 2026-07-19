@@ -1,7 +1,7 @@
 import { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import type { SummaryResponse } from '../shared/types';
 import { api, ApiError } from './api';
-import { getWebApp, haptic } from './telegram';
+import { getWebApp, haptic, confirmDialog } from './telegram';
 import { SummaryBar } from './components/SummaryBar';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { Loading, ErrorState } from './components/States';
@@ -19,28 +19,48 @@ export function App() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'no-telegram' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
   const [tab, setTab] = useState<Tab>('history');
+  const [editingActive, setEditingActive] = useState(false);
 
   const firstName = getWebApp()?.initDataUnsafe.user?.first_name ?? null;
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const s = await api.summary();
-        setSummary(s);
-        setStatus('ready');
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
-          setStatus('no-telegram');
-        } else {
-          setErrorMsg(err instanceof Error ? err.message : 'Ошибка загрузки');
-          setStatus('error');
-        }
+  const loadSummary = useCallback(async () => {
+    setStatus((prev) => (prev === 'ready' ? prev : 'loading'));
+    try {
+      const s = await api.summary();
+      setSummary(s);
+      setStatus('ready');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setStatus('no-telegram');
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Ошибка загрузки');
+        setStatus('error');
       }
-    })();
+    }
   }, []);
 
-  const switchTab = (next: Tab) => {
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  // Закрытие/сворачивание Telegram во время правки тренировки не должно
+  // молча стирать введённое — предупреждаем через нативный диалог браузера/WebView.
+  useEffect(() => {
+    if (!editingActive) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [editingActive]);
+
+  const switchTab = async (next: Tab) => {
     if (next === tab) return;
+    if (editingActive) {
+      const confirmed = await confirmDialog('Есть несохранённые изменения тренировки. Уйти без сохранения?');
+      if (!confirmed) return;
+    }
     haptic('light');
     setTab(next);
   };
@@ -77,7 +97,7 @@ export function App() {
   if (status === 'error') {
     return (
       <div className="app">
-        <ErrorState title="Что-то пошло не так" message={errorMsg} />
+        <ErrorState title="Что-то пошло не так" message={errorMsg} onRetry={loadSummary} />
       </div>
     );
   }
@@ -95,7 +115,7 @@ export function App() {
         {summary && <SummaryBar summary={summary} />}
 
         {tab === 'history' ? (
-          <HistoryScreen onWorkoutsChanged={refreshSummary} />
+          <HistoryScreen onWorkoutsChanged={refreshSummary} onEditingChange={setEditingActive} />
         ) : (
           <Suspense fallback={<Loading />}>
             <ProgressScreen />

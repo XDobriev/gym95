@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -30,26 +30,29 @@ export function ProgressScreen() {
   const [volumeStatus, setVolumeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [volumeError, setVolumeError] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { names } = await api.exercises();
-        if (names.length === 0) {
-          setStatus('empty');
-          return;
-        }
-        setNames(names);
-        setSelected(names[0]);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
-          setErrorMsg('Открой приложение из Telegram, чтобы увидеть свой прогресс.');
-        } else {
-          setErrorMsg(err instanceof Error ? err.message : 'Не удалось загрузить упражнения');
-        }
-        setStatus('error');
+  const loadExercises = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const { names } = await api.exercises();
+      if (names.length === 0) {
+        setStatus('empty');
+        return;
       }
-    })();
+      setNames(names);
+      setSelected(names[0]);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setErrorMsg('Открой приложение из Telegram, чтобы увидеть свой прогресс.');
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Не удалось загрузить упражнения');
+      }
+      setStatus('error');
+    }
   }, []);
+
+  useEffect(() => {
+    loadExercises();
+  }, [loadExercises]);
 
   useEffect(() => {
     if (!selected) return;
@@ -93,7 +96,9 @@ export function ProgressScreen() {
   };
 
   if (status === 'loading') return <Loading />;
-  if (status === 'error') return <ErrorState title="Ошибка" message={errorMsg} />;
+  if (status === 'error') {
+    return <ErrorState title="Ошибка" message={errorMsg} onRetry={loadExercises} />;
+  }
   if (status === 'empty' || !names) {
     return (
       <EmptyState
@@ -218,7 +223,7 @@ export function ProgressScreen() {
       ) : volumeStatus === 'loading' || volumeStatus === 'idle' ? (
         <Loading />
       ) : volumeStatus === 'error' ? (
-        <ErrorState title="Ошибка" message={volumeError} />
+        <ErrorState title="Ошибка" message={volumeError} onRetry={() => setVolumeStatus('idle')} />
       ) : (
         <div className="chart-card">
           <div className="chart-title">Тоннаж по неделям</div>

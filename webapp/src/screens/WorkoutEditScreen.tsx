@@ -1,8 +1,16 @@
 import { useRef, useState } from 'react';
 import type { WorkoutDTO, WorkoutType, CardioActivity, WorkoutUpdateRequest } from '../../shared/types';
 import { api, ApiError } from '../api';
-import { TYPE_LABEL, CARDIO_LABEL, toDateInputValue, combineDateInputWithOriginalTime } from '../format';
+import {
+  TYPE_LABEL,
+  CARDIO_LABEL,
+  toDateInputValue,
+  combineDateInputWithOriginalTime,
+  formatSetsInline,
+  pluralizeRu,
+} from '../format';
 import { haptic, notifyHaptic, confirmDialog } from '../telegram';
+import { parseSetsLine } from '../setsParser';
 
 interface EditableExercise {
   id: string;
@@ -22,6 +30,17 @@ const CARDIO_ACTIVITIES: CardioActivity[] = ['treadmill', 'bike', 'running', 'wa
 
 function formatSetsForEdit(sets: { weight: number; reps: number }[]): string {
   return sets.map((s) => (s.weight > 0 ? `${s.weight}x${s.reps}` : `${s.reps}`)).join(', ');
+}
+
+// Живой парс-превью под полем подходов — та же грамматика, что и на сабмите/бэкенде,
+// чтобы опечатка была видна сразу, а не только после попытки сохранить.
+function setsPreview(text: string): { message: string; isError: boolean } | null {
+  if (text.trim() === '') return null;
+  const parsed = parseSetsLine(text);
+  if (!parsed.ok) return { message: parsed.error, isError: true };
+  const count = parsed.sets.length;
+  const word = pluralizeRu(count, ['подход', 'подхода', 'подходов']);
+  return { message: `${count} ${word}: ${formatSetsInline(parsed.sets)}`, isError: false };
 }
 
 interface Props {
@@ -239,35 +258,47 @@ export function WorkoutEditScreen({ workout, onCancel, onSaved, onDeleted }: Pro
 
       <div className="edit-section">
         <div className="edit-section-title">Упражнения</div>
-        {exercises.map((ex, i) => (
-          <div className="edit-exercise-row" key={ex.id}>
-            <div className="edit-exercise-inputs">
-              <input
-                placeholder="Название"
-                value={ex.name}
-                onChange={(e) => updateExercise(ex.id, { name: e.target.value })}
-                disabled={busy}
-              />
-              <input
-                placeholder="40x12, 42.5x10"
-                value={ex.setsText}
-                onChange={(e) => updateExercise(ex.id, { setsText: e.target.value })}
-                disabled={busy}
-              />
+        {exercises.map((ex, i) => {
+          const preview = setsPreview(ex.setsText);
+          return (
+            <div key={ex.id}>
+              <div className="edit-exercise-row">
+                <div className="edit-exercise-inputs">
+                  <input
+                    placeholder="Название"
+                    value={ex.name}
+                    onChange={(e) => updateExercise(ex.id, { name: e.target.value })}
+                    disabled={busy}
+                  />
+                  <input
+                    placeholder="40x12, 42.5x10"
+                    value={ex.setsText}
+                    onChange={(e) => updateExercise(ex.id, { setsText: e.target.value })}
+                    disabled={busy}
+                  />
+                </div>
+                <div className="edit-exercise-actions">
+                  <button disabled={busy || i === 0} onClick={() => moveExercise(i, -1)} aria-label="Выше">
+                    ↑
+                  </button>
+                  <button
+                    disabled={busy || i === exercises.length - 1}
+                    onClick={() => moveExercise(i, 1)}
+                    aria-label="Ниже"
+                  >
+                    ↓
+                  </button>
+                  <button disabled={busy} className="danger" onClick={() => removeExercise(ex.id)} aria-label="Удалить">
+                    🗑
+                  </button>
+                </div>
+              </div>
+              {preview && (
+                <div className={`sets-preview${preview.isError ? ' error' : ''}`}>{preview.message}</div>
+              )}
             </div>
-            <div className="edit-exercise-actions">
-              <button disabled={busy || i === 0} onClick={() => moveExercise(i, -1)} aria-label="Выше">
-                ↑
-              </button>
-              <button disabled={busy || i === exercises.length - 1} onClick={() => moveExercise(i, 1)} aria-label="Ниже">
-                ↓
-              </button>
-              <button disabled={busy} className="danger" onClick={() => removeExercise(ex.id)} aria-label="Удалить">
-                🗑
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         <button className="add-btn" onClick={addExercise} disabled={busy}>
           + Упражнение
         </button>
