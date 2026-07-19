@@ -132,6 +132,42 @@ body {
 .stat-tile.reached .stat-value {
   color: var(--lime-ink);
 }
+/* Одноразовая анимация при первом достижении цели недели за эту неделю
+   (дедупликация — в SummaryBar.tsx через localStorage). Блик идёт через
+   ::before, а не ::after, потому что ::after у .stat-tile уже занят под
+   акцентную полоску снизу плитки (см. .stat-tile::after выше) — использование
+   ::after здесь перекрыло бы её на время анимации. */
+.stat-tile.celebrate {
+  animation: celebrateGlow 1.4s ease-out;
+}
+.stat-tile.celebrate::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: celebrateSweep 1.4s ease-out;
+  pointer-events: none;
+}
+@keyframes celebrateGlow {
+  0%,
+  100% {
+    box-shadow: var(--glow);
+  }
+  35% {
+    box-shadow: 0 0 22px rgba(201, 255, 46, 0.65);
+  }
+}
+@keyframes celebrateSweep {
+  0% {
+    left: -60%;
+  }
+  100% {
+    left: 130%;
+  }
+}
 .stat-value {
   font-family: var(--font-display);
   font-weight: 400;
