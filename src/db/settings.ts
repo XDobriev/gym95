@@ -6,12 +6,14 @@ export interface UserSettings {
   reminders_enabled: boolean;
   reminder_time: string | null;
   last_reminder_sent_date: string | null;
+  week_goal: number;
 }
 
 const DEFAULT_SETTINGS: Omit<UserSettings, 'user_id'> = {
   reminders_enabled: false,
   reminder_time: null,
   last_reminder_sent_date: null,
+  week_goal: 3,
 };
 
 export async function getSettings(userId: number): Promise<UserSettings> {
