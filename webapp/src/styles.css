@@ -304,6 +304,32 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+/* --- Переключатель вкладок на «Прогрессе» --- */
+.progress-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.progress-tab {
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 20%, transparent);
+  background: var(--tg-secondary-bg);
+  padding: 9px 0;
+  border-radius: 999px;
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tg-hint);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.progress-tab.active {
+  border-color: color-mix(in srgb, var(--lime) 55%, transparent);
+  color: var(--lime-ink);
+  box-shadow: var(--glow);
+}
 select {
   width: 100%;
   padding: 12px 14px;
