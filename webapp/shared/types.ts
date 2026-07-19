@@ -59,6 +59,15 @@ export interface ProgressResponse {
   points: ProgressPoint[];
 }
 
+export interface VolumeHistoryPoint {
+  weekStart: string;
+  volumeKg: number;
+}
+
+export interface VolumeHistoryResponse {
+  weeks: VolumeHistoryPoint[];
+}
+
 // --- Редактирование (PUT /api/workout/:id) ---
 // Подходы шлём строкой ("40x12, 42.5x10") — сервер парсит тем же parseSetsLine,
 // что и мастер создания в боте: одна точка правды для формата.

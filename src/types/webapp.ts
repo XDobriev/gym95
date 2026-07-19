@@ -50,3 +50,12 @@ export interface ProgressResponse {
   exercise: string;
   points: ProgressPoint[];
 }
+
+export interface VolumeHistoryPoint {
+  weekStart: string;
+  volumeKg: number;
+}
+
+export interface VolumeHistoryResponse {
+  weeks: VolumeHistoryPoint[];
+}
