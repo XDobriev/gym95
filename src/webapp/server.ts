@@ -2,7 +2,7 @@ import { IncomingMessage, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateInitData, AuthError, AuthedUser } from './initData';
-import { getHistoryPage, getExerciseNames, getProgress, getSummary } from './queries';
+import { getHistoryPage, getExerciseNames, getProgress, getSummary, getVolumeHistory } from './queries';
 import { validateWorkoutInput } from './validateWorkout';
 import { updateWorkout, deleteWorkoutForUser } from './mutations';
 
@@ -113,6 +113,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
         sendJson(res, 200, { exercise, points: await getProgress(user.userId, exercise) });
         return;
       }
+
+      case '/api/volume-history':
+        sendJson(res, 200, { weeks: await getVolumeHistory(user.userId) });
+        return;
 
       default:
         sendJson(res, 404, { error: 'Не найдено' });
