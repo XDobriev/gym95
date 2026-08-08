@@ -77,7 +77,9 @@ async function renderMenuById(
   });
 }
 
-function parseDateInput(text: string): { ok: true; iso: string } | { ok: false; error: string } {
+function parseDateInput(
+  text: string
+): { ok: true; year: number; month: number; day: number } | { ok: false; error: string } {
   const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(text.trim());
   if (!match) {
     return { ok: false, error: 'Не понял дату. Формат: ДД.ММ.ГГГГ, например 05.03.2026' };
@@ -85,11 +87,30 @@ function parseDateInput(text: string): { ok: true; iso: string } | { ok: false; 
   const day = parseInt(match[1], 10);
   const month = parseInt(match[2], 10);
   const year = parseInt(match[3], 10);
-  const date = new Date(Date.UTC(year, month - 1, day, 12));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+  const check = new Date(Date.UTC(year, month - 1, day, 12));
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) {
     return { ok: false, error: 'Такой даты не существует. Формат: ДД.ММ.ГГГГ, например 05.03.2026' };
   }
-  return { ok: true, iso: date.toISOString() };
+  return { ok: true, year, month, day };
+}
+
+// Переносит только календарную дату, сохраняя время суток исходной записи —
+// иначе правка даты обнуляла бы его до полудня UTC. Зеркалит
+// webapp/src/format.ts:combineDateInputWithOriginalTime (тот же UX на бот-стороне).
+function combineDateWithOriginalTime(year: number, month: number, day: number, originalIso: string): string {
+  const original = new Date(originalIso);
+  const combined = new Date(
+    Date.UTC(
+      year,
+      month - 1,
+      day,
+      original.getUTCHours(),
+      original.getUTCMinutes(),
+      original.getUTCSeconds(),
+      original.getUTCMilliseconds()
+    )
+  );
+  return combined.toISOString();
 }
 
 function parseOptionalPositiveInt(text: string): { ok: true; value: number | null } | { ok: false; error: string } {
@@ -386,7 +407,9 @@ export function registerWorkoutEdit(bot: Telegraf): void {
     startEditSession({ userId, chatId: target.chatId, messageId: target.messageId, workoutId, offset });
     setEditStep(userId, 'awaiting_exercise_sets');
     const session = getEditSession(userId);
-    if (session) session.exerciseOrderIndex = index;
+    // Запоминаем стабильный id, а не позиционный index: список упражнений
+    // пересчитывается заново при сабмите, и порядок мог измениться (гонка).
+    if (session) session.exerciseId = exercise.id;
 
     await ctx.telegram.editMessageText(
       target.chatId,
@@ -456,7 +479,13 @@ export function registerWorkoutEdit(bot: Telegraf): void {
           await ctx.reply(parsed.error);
           return;
         }
-        await updateWorkoutFields(session.userId, session.workoutId, { date: parsed.iso });
+        const workout = await getWorkoutOwned(session.userId, session.workoutId);
+        if (!workout) {
+          await finishEdit(ctx, session);
+          return;
+        }
+        const iso = combineDateWithOriginalTime(parsed.year, parsed.month, parsed.day, workout.date);
+        await updateWorkoutFields(session.userId, session.workoutId, { date: iso });
         await finishEdit(ctx, session);
         return;
       }
@@ -501,7 +530,7 @@ export function registerWorkoutEdit(bot: Telegraf): void {
           return;
         }
         const exercises = await getExercisesByWorkoutId(session.workoutId);
-        const exercise = exercises[session.exerciseOrderIndex ?? -1];
+        const exercise = exercises.find((ex) => ex.id === session.exerciseId);
         if (!exercise) {
           await ctx.reply('Это упражнение уже удалено.');
           clearEditSession(session.userId);

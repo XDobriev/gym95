@@ -26,7 +26,7 @@ export interface EditSession {
   workoutId: string;
   offset: number;
   step: EditStep;
-  exerciseOrderIndex?: number;
+  exerciseId?: string;
   cardioId?: string;
   cardioDraft?: CardioEditDraft;
   startedAt: number;
