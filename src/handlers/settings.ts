@@ -1,11 +1,17 @@
 import { Telegraf, Markup } from 'telegraf';
 import { getSettings, upsertSettings, UserSettings } from '../db/settings';
 import { pluralizeRu } from '../utils/format';
+import { otherActiveFlow, activeFlowBlockedMessage } from './activeFlow';
+import {
+  isWaitingForTime,
+  isWaitingForGoal,
+  setWaitingForTime,
+  setWaitingForGoal,
+  clearAwaitingSettingsInput,
+} from './settingsState';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const GOAL_REGEX = /^[1-7]$/;
-const waitingForTime = new Set<number>();
-const waitingForGoal = new Set<number>();
 
 function settingsText(s: UserSettings): string {
   const status = s.reminders_enabled ? 'включены' : 'выключены';
@@ -32,8 +38,7 @@ export function registerSettings(bot: Telegraf): void {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    waitingForTime.delete(userId);
-    waitingForGoal.delete(userId);
+    clearAwaitingSettingsInput(userId);
     const settings = await getSettings(userId);
     await ctx.reply(settingsText(settings), { reply_markup: settingsKeyboard(settings) });
   });
@@ -61,8 +66,13 @@ export function registerSettings(bot: Telegraf): void {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    waitingForGoal.delete(userId);
-    waitingForTime.add(userId);
+    const conflict = otherActiveFlow(userId, 'settings');
+    if (conflict) {
+      await ctx.reply(activeFlowBlockedMessage(conflict));
+      return;
+    }
+
+    setWaitingForTime(userId);
     await ctx.reply('Напиши время в формате ЧЧ:ММ (например, 19:30). Часовой пояс — Europe/Moscow.');
   });
 
@@ -71,8 +81,13 @@ export function registerSettings(bot: Telegraf): void {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    waitingForTime.delete(userId);
-    waitingForGoal.add(userId);
+    const conflict = otherActiveFlow(userId, 'settings');
+    if (conflict) {
+      await ctx.reply(activeFlowBlockedMessage(conflict));
+      return;
+    }
+
+    setWaitingForGoal(userId);
     await ctx.reply('Сколько тренировок в неделю — цель? Число от 1 до 7.');
   });
 
@@ -80,7 +95,7 @@ export function registerSettings(bot: Telegraf): void {
     const userId = ctx.from?.id;
     if (!userId) return next();
 
-    if (waitingForGoal.has(userId)) {
+    if (isWaitingForGoal(userId)) {
       const text = 'text' in ctx.message ? ctx.message.text.trim() : '';
       if (!GOAL_REGEX.test(text)) {
         await ctx.reply('Не понял число. Пришли целое от 1 до 7, например 4.');
@@ -88,7 +103,7 @@ export function registerSettings(bot: Telegraf): void {
       }
       const n = Number(text);
 
-      waitingForGoal.delete(userId);
+      clearAwaitingSettingsInput(userId);
       const settings = await upsertSettings(userId, { week_goal: n });
       const goalWord = pluralizeRu(n, ['тренировка', 'тренировки', 'тренировок']);
       await ctx.reply(`✅ Готово! Цель недели: ${n} ${goalWord}.`, {
@@ -97,7 +112,7 @@ export function registerSettings(bot: Telegraf): void {
       return;
     }
 
-    if (!waitingForTime.has(userId)) {
+    if (!isWaitingForTime(userId)) {
       return next();
     }
 
@@ -107,7 +122,7 @@ export function registerSettings(bot: Telegraf): void {
       return;
     }
 
-    waitingForTime.delete(userId);
+    clearAwaitingSettingsInput(userId);
     const settings = await upsertSettings(userId, { reminder_time: text });
     await ctx.reply(`✅ Готово! Время обновлено: ${text} (Europe/Moscow).`, {
       reply_markup: settingsKeyboard(settings),

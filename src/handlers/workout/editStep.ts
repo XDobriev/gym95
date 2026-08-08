@@ -15,6 +15,7 @@ import {
   editCardioSkipKeyboard,
 } from './keyboards';
 import { getEditSession, startEditSession, clearEditSession, setEditStep, EditSession } from './editState';
+import { otherActiveFlow, activeFlowBlockedMessage } from '../activeFlow';
 
 // Правка кардио идёт цепочкой шагов (как при создании тренировки), но «пропустить»
 // здесь означает «оставить как в БД», а не «оставить пустым» — поэтому draft
@@ -197,6 +198,12 @@ export function registerWorkoutEdit(bot: Telegraf): void {
     const target = callbackTarget(ctx);
     if (!userId || !target) return;
 
+    const conflict = otherActiveFlow(userId, 'edit');
+    if (conflict) {
+      await ctx.reply(activeFlowBlockedMessage(conflict));
+      return;
+    }
+
     const workoutId = ctx.match[1];
     const offset = parseInt(ctx.match[2], 10);
     startEditSession({ userId, chatId: target.chatId, messageId: target.messageId, workoutId, offset });
@@ -269,6 +276,12 @@ export function registerWorkoutEdit(bot: Telegraf): void {
     const userId = ctx.from?.id;
     const target = callbackTarget(ctx);
     if (!userId || !target) return;
+
+    const conflict = otherActiveFlow(userId, 'edit');
+    if (conflict) {
+      await ctx.reply(activeFlowBlockedMessage(conflict));
+      return;
+    }
 
     const field = ctx.match[1];
     const workoutId = ctx.match[2];
@@ -352,6 +365,12 @@ export function registerWorkoutEdit(bot: Telegraf): void {
     const userId = ctx.from?.id;
     const target = callbackTarget(ctx);
     if (!userId || !target) return;
+
+    const conflict = otherActiveFlow(userId, 'edit');
+    if (conflict) {
+      await ctx.reply(activeFlowBlockedMessage(conflict));
+      return;
+    }
 
     const index = parseInt(ctx.match[1], 10);
     const workoutId = ctx.match[2];

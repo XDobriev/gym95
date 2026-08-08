@@ -1,6 +1,7 @@
 import { Telegraf, Context } from 'telegraf';
 import { WorkoutType } from '../../types/domain';
 import { getDraft, startDraft, clearDraft, canAddCardio } from './state';
+import { otherActiveFlow, activeFlowBlockedMessage } from '../activeFlow';
 import { typeKeyboard, resumeOrRestartKeyboard, exerciseSavedMenuKeyboard } from './keyboards';
 import { handleTypeChosen, handleWarmupMinutesEntered, handleWarmupSkip, renderWarmupPrompt } from './typeStep';
 import {
@@ -56,6 +57,12 @@ async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
       'У тебя уже есть незавершённая тренировка. Продолжить её или начать заново?',
       { reply_markup: resumeOrRestartKeyboard() }
     );
+    return;
+  }
+
+  const conflict = otherActiveFlow(userId, 'draft');
+  if (conflict) {
+    await ctx.reply(activeFlowBlockedMessage(conflict));
     return;
   }
 

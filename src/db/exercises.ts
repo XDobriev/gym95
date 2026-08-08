@@ -149,8 +149,13 @@ export async function getExerciseHistory(
 
   if (error) throw new Error(`getExerciseHistory: ${error.message}`);
 
-  return ((data ?? []) as unknown as { sets: SetEntry[]; workouts: { date: string }[] }[]).map((row) => ({
-    date: row.workouts[0].date,
-    sets: row.sets,
-  }));
+  // Supabase для embed «многие-к-одному» (exercises → workouts) иногда возвращает
+  // объект вместо массива. Нормализуем на случай обеих форм, чтобы не упасть на .date.
+  return ((data ?? []) as unknown as {
+    sets: SetEntry[];
+    workouts: { date: string } | { date: string }[];
+  }[]).map((row) => {
+    const workout = Array.isArray(row.workouts) ? row.workouts[0] : row.workouts;
+    return { date: workout?.date ?? '', sets: row.sets };
+  });
 }
