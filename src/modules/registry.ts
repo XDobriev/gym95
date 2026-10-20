@@ -2,6 +2,7 @@ import { Goal } from '../types/profile';
 import { ModuleId, UserModuleRow } from '../db/modules';
 import { activityTodaySection } from './activity';
 import { sleepTodaySection, weightTodaySection } from './body';
+import { foodTodaySection } from './food';
 
 export interface TodayContext {
   tz: string;
@@ -53,7 +54,8 @@ export const MODULES: ModuleDef[] = [
   {
     id: 'food',
     title: '🍽 Еда',
-    available: false,
+    available: true,
+    todaySection: (userId, ctx) => foodTodaySection(userId, ctx.todayStr),
     defaults: {
       lose: { enabled: false, settings: {} },
       gain: { enabled: true, settings: {} },

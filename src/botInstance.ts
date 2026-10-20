@@ -14,6 +14,7 @@ import { registerSettings } from './handlers/settings';
 import { registerWebApp } from './handlers/webapp';
 import { registerMorning } from './handlers/morning';
 import { registerBody } from './handlers/body';
+import { registerFood } from './handlers/food';
 
 export const bot = new Telegraf(config.BOT_TOKEN);
 
@@ -34,6 +35,8 @@ registerWebApp(bot);
 registerMorning(bot);
 // Последним: текстовый обработчик веса/сна забирает текст, только если его не взял никто другой.
 registerBody(bot);
+// Самым последним: еда пишется свободным текстом («обед 650») и берёт всё, что осталось.
+registerFood(bot);
 
 const FAILURE_TEXT = '⚠️ Не получилось выполнить действие — сервис может быть временно недоступен. Попробуй через пару минут.';
 

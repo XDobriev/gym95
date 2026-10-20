@@ -12,6 +12,8 @@ import { formatCardioInline, formatSetsInline, formatWorkoutTypeWithEmoji } from
 import { clearBodyInput, setBodyInput } from './body/state';
 import { buildToday, todayKeyboard } from './today';
 import { handleNewWorkoutForDate } from './workout';
+import { startFoodForDate } from './food';
+import { foodYesterdayLine } from '../modules/food';
 
 export type Send = (text: string, extra?: ExtraReplyMessage) => Promise<unknown>;
 
@@ -32,7 +34,13 @@ function longDate(dateStr: string): string {
   );
 }
 
-async function yesterdayReview(userId: number, tz: string, yesterday: string, today: string): Promise<string> {
+async function yesterdayReview(
+  userId: number,
+  tz: string,
+  yesterday: string,
+  today: string,
+  withFood: boolean
+): Promise<string> {
   const workouts = await getWorkoutsBetween(
     userId,
     localMidnightUtc(yesterday, tz).toISOString(),
@@ -70,6 +78,8 @@ async function yesterdayReview(userId: number, tz: string, yesterday: string, to
     }
   }
 
+  if (withFood) lines.push(await foodYesterdayLine(userId, yesterday));
+
   const chain = await getChainInfo(userId).catch(() => null);
   if (chain) lines.push(`🔗 Цепочка: ${chain.current} / ${chain.goal}`);
 
@@ -77,11 +87,13 @@ async function yesterdayReview(userId: number, tz: string, yesterday: string, to
   return lines.join('\n');
 }
 
-function reviewKeyboard() {
-  return Markup.inlineKeyboard([
+function reviewKeyboard(withFood: boolean) {
+  const rows = [
     [Markup.button.callback('✅ Всё верно', 'm:ok')],
     [Markup.button.callback('➕ Тренировка за вчера', 'm:addw')],
-  ]).reply_markup;
+  ];
+  if (withFood) rows.push([Markup.button.callback('🍽 Еда за вчера', 'm:food')]);
+  return Markup.inlineKeyboard(rows).reply_markup;
 }
 
 const skipKeyboard = () => Markup.inlineKeyboard([[Markup.button.callback('Пропустить', 'm:skip')]]).reply_markup;
@@ -103,7 +115,8 @@ export async function startMorning(send: Send, userId: number): Promise<void> {
 
   clearBodyInput(userId);
   sessions.set(userId, { today, yesterday, steps });
-  await send(await yesterdayReview(userId, tz, yesterday, today), { reply_markup: reviewKeyboard() });
+  const withFood = on('food');
+  await send(await yesterdayReview(userId, tz, yesterday, today, withFood), { reply_markup: reviewKeyboard(withFood) });
 }
 
 // Следующий шаг обзора. Вызывается после «Всё верно», «Пропустить» и после ввода значения.
@@ -154,6 +167,13 @@ export function registerMorning(bot: Telegraf): void {
     clearBodyInput(ctx.from.id);
     await dropKeyboard(ctx);
     await continueMorning(ctxSend(ctx), ctx.from.id);
+  });
+
+  bot.action('m:food', async (ctx) => {
+    await ctx.answerCbQuery();
+    const session = sessions.get(ctx.from.id);
+    const yesterday = session?.yesterday ?? addDays(localNow(await getUserTimezone(ctx.from.id)).dateStr, -1);
+    await startFoodForDate(ctx, ctx.from.id, yesterday);
   });
 
   bot.action('m:addw', async (ctx) => {

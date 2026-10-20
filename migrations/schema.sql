@@ -252,3 +252,18 @@ alter table user_settings add column if not exists morning_enabled boolean not n
 alter table user_settings add column if not exists morning_time text not null default '07:30'
   check (morning_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
 alter table user_settings add column if not exists last_morning_date date null;
+
+-- ===== Этап 4 (часть): еда (2026-10-20) =====
+
+-- Запись о еде; eaten_on — местная дата пользователя. meal null — приём пищи не указан.
+create table if not exists food_entries (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     bigint not null,
+  eaten_on    date not null,
+  meal        text null check (meal is null or meal in ('breakfast', 'lunch', 'dinner', 'snack')),
+  description text null,
+  kcal        int not null check (kcal between 20 and 5000),
+  created_at  timestamptz not null default now()
+);
+create index if not exists idx_food_entries_user_day on food_entries (user_id, eaten_on);
+alter table food_entries enable row level security;
