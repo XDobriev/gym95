@@ -5,6 +5,8 @@ import { fmtKg, loadWeightStats, sleepAverage, weightTrendLine } from '../../mod
 import { formatDelta, formatHours, parseSleepHours, parseValueWithDate, parseWeightValue } from '../../utils/body';
 import { buildWeightChartUrl } from '../../utils/chart';
 import { parseFoodLine } from '../../utils/food';
+import { getLastMeasurements } from '../../db/measure';
+import { measureDiffLines } from '../../utils/measure';
 import { localNoonUtc, localNow } from '../../utils/time';
 import { otherActiveFlow, activeFlowBlockedMessage } from '../activeFlow';
 import { continueMorning, Send } from '../morning';
@@ -122,11 +124,28 @@ async function sendBodySummary(ctx: Context, userId: number): Promise<void> {
       ? `😴 Сон в среднем за неделю: ${formatHours(sleep.avg7)}`
       : '😴 Сна пока мало для среднего — /sleep 7.5'
   );
+  const [lastMeasure, prevMeasure] = await Promise.all([
+    getLastMeasurements(userId),
+    getLastMeasurements(userId).then((m) => (m ? getLastMeasurements(userId, m.measured_on) : null)),
+  ]);
+  if (lastMeasure) {
+    lines.push('', `📏 Замеры ${ddmm(lastMeasure.measured_on)}${prevMeasure ? ` (к ${ddmm(prevMeasure.measured_on)})` : ''}:`);
+    measureDiffLines(lastMeasure, prevMeasure).forEach((l) => lines.push(`   ${l}`));
+  } else {
+    lines.push('', '📏 Замеров пока нет — /measure');
+  }
   lines.push('', 'Смотрим на среднее за неделю: вес за день скачет на 0,5–1,5 кг из-за воды и соли.');
   const text = lines.join('\n');
 
-  if (days.length >= 2) await ctx.replyWithPhoto(buildWeightChartUrl(days), { caption: text });
-  else await ctx.reply(text);
+  const CAPTION_LIMIT = 1024; // лимит подписи к фото в Telegram
+  if (days.length >= 2 && text.length <= CAPTION_LIMIT) {
+    await ctx.replyWithPhoto(buildWeightChartUrl(days), { caption: text });
+  } else if (days.length >= 2) {
+    await ctx.replyWithPhoto(buildWeightChartUrl(days));
+    await ctx.reply(text);
+  } else {
+    await ctx.reply(text);
+  }
 }
 
 export function registerBody(bot: Telegraf): void {

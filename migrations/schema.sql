@@ -267,3 +267,32 @@ create table if not exists food_entries (
 );
 create index if not exists idx_food_entries_user_day on food_entries (user_id, eaten_on);
 alter table food_entries enable row level security;
+
+-- ===== Замеры лентой и вода (2026-10-20) =====
+
+-- Сессия замеров (см); любой замер может быть пропущен. measured_on — местная дата.
+create table if not exists body_measurements (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     bigint not null,
+  measured_on date not null,
+  waist       numeric(5,1) null,
+  belly       numeric(5,1) null,
+  chest       numeric(5,1) null,
+  hips        numeric(5,1) null,
+  biceps      numeric(5,1) null,
+  thigh       numeric(5,1) null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists idx_body_measurements_user_day on body_measurements (user_id, measured_on desc);
+alter table body_measurements enable row level security;
+
+-- Выпитая вода: по записи на нажатие кнопки; drunk_on — местная дата.
+create table if not exists water_logs (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    bigint not null,
+  drunk_on   date not null,
+  ml         int not null check (ml between 50 and 2000),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_water_logs_user_day on water_logs (user_id, drunk_on);
+alter table water_logs enable row level security;

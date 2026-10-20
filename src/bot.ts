@@ -3,6 +3,7 @@ import { TelegramError } from 'telegraf';
 import { bot } from './botInstance';
 import { startReminderCron } from './cron/reminders';
 import { startMorningCron } from './cron/morning';
+import { startWaterCron } from './cron/water';
 import { setupWebAppMenuButton, setupBotCommands } from './handlers/webapp';
 import { handleRequest } from './webapp/server';
 
@@ -24,6 +25,7 @@ async function launchWithRetry(attempt = 1): Promise<void> {
       console.log(`gym95 bot запущен (long polling) как @${bot.botInfo?.username}`);
       startReminderCron(bot);
       startMorningCron(bot);
+      startWaterCron(bot);
       void setupWebAppMenuButton(bot);
       void setupBotCommands(bot);
     });

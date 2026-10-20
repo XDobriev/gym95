@@ -37,6 +37,8 @@ export async function setupBotCommands(bot: Telegraf): Promise<void> {
       { command: 'weight', description: 'Записать вес' },
       { command: 'sleep', description: 'Записать сон' },
       { command: 'food', description: 'Еда: сегодня, средние, частые блюда' },
+      { command: 'water', description: 'Вода за сегодня' },
+      { command: 'measure', description: 'Замеры лентой' },
       { command: 'body', description: 'Вес и сон: сводка и график' },
       { command: 'morning', description: 'Утренний обзор' },
       { command: 'new_workout', description: 'Новая тренировка' },

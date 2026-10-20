@@ -3,6 +3,7 @@ import { ModuleId, UserModuleRow } from '../db/modules';
 import { activityTodaySection } from './activity';
 import { sleepTodaySection, weightTodaySection } from './body';
 import { foodTodaySection } from './food';
+import { waterTodaySection } from './water';
 
 export interface TodayContext {
   tz: string;
@@ -44,7 +45,8 @@ export const MODULES: ModuleDef[] = [
   {
     id: 'water',
     title: '💧 Вода',
-    available: false,
+    available: true,
+    todaySection: (userId, ctx) => waterTodaySection(userId, ctx.tz, ctx.todayStr),
     defaults: {
       lose: { enabled: true, settings: {} },
       gain: { enabled: true, settings: {} },

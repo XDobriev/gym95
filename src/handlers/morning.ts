@@ -14,10 +14,12 @@ import { buildToday, todayKeyboard } from './today';
 import { handleNewWorkoutForDate } from './workout';
 import { startFoodForDate } from './food';
 import { foodYesterdayLine } from '../modules/food';
+import { getLastMeasurements } from '../db/measure';
+import { MEASURE_INTERVAL_DAYS, measurementDue } from '../utils/measure';
 
 export type Send = (text: string, extra?: ExtraReplyMessage) => Promise<unknown>;
 
-type MorningStep = 'sleep' | 'weight';
+type MorningStep = 'sleep' | 'weight' | 'measure';
 
 interface MorningSession {
   today: string;
@@ -112,6 +114,11 @@ export async function startMorning(send: Send, userId: number): Promise<void> {
   const steps: MorningStep[] = [];
   if (on('sleep')) steps.push('sleep');
   if (weightToday) steps.push('weight');
+  // Замеры лентой — часть модуля веса: раз в 30 дней после прошлых.
+  if (on('weight')) {
+    const last = await getLastMeasurements(userId);
+    if (measurementDue(last?.measured_on ?? null, today)) steps.push('measure');
+  }
 
   clearBodyInput(userId);
   sessions.set(userId, { today, yesterday, steps });
@@ -133,6 +140,18 @@ export async function continueMorning(send: Send, userId: number): Promise<void>
   if (step === 'weight') {
     setBodyInput(userId, { kind: 'weight', dateStr: null, morning: true });
     await send('⚖️ Вес натощак? Например: 130.4', { reply_markup: skipKeyboard() });
+    return;
+  }
+
+  if (step === 'measure') {
+    await send(
+      `📏 Пора снять замеры лентой — прошло ${MEASURE_INTERVAL_DAYS} дней с прошлых (или их ещё не было).\n6 замеров, пара минут.`,
+      {
+        reply_markup: Markup.inlineKeyboard([
+          [Markup.button.callback('📏 Начать', 'ms:start:m'), Markup.button.callback('Позже', 'm:skip')],
+        ]).reply_markup,
+      }
+    );
     return;
   }
 

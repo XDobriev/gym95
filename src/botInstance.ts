@@ -15,6 +15,8 @@ import { registerWebApp } from './handlers/webapp';
 import { registerMorning } from './handlers/morning';
 import { registerBody } from './handlers/body';
 import { registerFood } from './handlers/food';
+import { registerWater } from './handlers/water';
+import { registerMeasure } from './handlers/measure';
 
 export const bot = new Telegraf(config.BOT_TOKEN);
 
@@ -33,6 +35,8 @@ registerExport(bot);
 registerSettings(bot);
 registerWebApp(bot);
 registerMorning(bot);
+registerWater(bot);
+registerMeasure(bot);
 // Последним: текстовый обработчик веса/сна забирает текст, только если его не взял никто другой.
 registerBody(bot);
 // Самым последним: еда пишется свободным текстом («обед 650») и берёт всё, что осталось.
