@@ -5,6 +5,7 @@ import { getModules } from '../db/modules';
 import { getUserTimezone } from '../db/profiles';
 import { availableModules } from '../modules/registry';
 import { localNow, localWeekStart, localMidnightUtc, daysBetween } from '../utils/time';
+import { pluralizeRu } from '../utils/format';
 import { resolveWebAppUrl } from './webapp';
 import { handleNewWorkoutCommand } from './workout';
 import { WorkoutType } from '../types/domain';
@@ -28,8 +29,15 @@ async function workoutsBlock(userId: number, tz: string, todayStr: string): Prom
   const weekStart = localMidnightUtc(localWeekStart(tz), tz).toISOString();
   const [weekCount, settings] = await Promise.all([countWorkoutsSince(userId, weekStart), getSettings(userId)]);
 
-  const weekLine = `   Неделя: ${weekCount} / ${settings.week_goal}`;
-  if (!last) return `🏋️ Тренировок пока нет\n${weekLine}`;
+  // «из N» требует родительного падежа: из 1 тренировки, из 3/5 тренировок.
+  const goalWord = pluralizeRu(settings.week_goal, ['тренировки', 'тренировок', 'тренировок']);
+  const weekLine = `   На этой неделе: ${weekCount} из ${settings.week_goal} ${goalWord}`;
+  if (!last) {
+    return (
+      `🏋️ Тренировок пока нет\n${weekLine}\n\n` +
+      'Прошлые тренировки можно записать задним числом: /new_workout → «📅 Другая дата».'
+    );
+  }
 
   const lastDay = localNow(tz, new Date(last.date)).dateStr;
   const ago = daysBetween(lastDay, todayStr);
