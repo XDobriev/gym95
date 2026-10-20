@@ -92,3 +92,21 @@ export interface WorkoutUpdateRequest {
   exercises: ExerciseInput[];
   cardio: CardioInput[];
 }
+
+// --- Вкладка «Тело» (GET /api/body) --- зеркало src/types/webapp.ts
+export interface BodyResponse {
+  modules: { weight: boolean; sleep: boolean; food: boolean; water: boolean; activity: boolean };
+  weights: { date: string; kg: number }[];
+  weightAvg7: number | null;
+  weightWeekChange: number | null;
+  weightMonthChange: number | null;
+  sleep: { date: string; hours: number }[];
+  sleepAvg7: number | null;
+  food: { date: string; kcal: number }[];
+  foodAvg7: number | null;
+  kcalNorm: number | null;
+  waterTodayMl: number;
+  waterTargetMl: number;
+  chain: { current: number; best: number; goal: number; deadline: string | null } | null;
+  measurements: { date: string; values: Record<string, number | null> }[];
+}

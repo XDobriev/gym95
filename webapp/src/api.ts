@@ -1,5 +1,6 @@
 import { getWebApp } from './telegram';
 import type {
+  BodyResponse,
   HistoryResponse,
   ProgressResponse,
   SummaryResponse,
@@ -62,6 +63,7 @@ export const api = {
   progress: (exercise: string) =>
     get<ProgressResponse>(`/api/progress?exercise=${encodeURIComponent(exercise)}`),
   volumeHistory: () => get<VolumeHistoryResponse>('/api/volume-history'),
+  body: () => get<BodyResponse>('/api/body'),
   updateWorkout: (id: string, body: WorkoutUpdateRequest) =>
     send(`/api/workout/${encodeURIComponent(id)}`, 'PUT', body),
   deleteWorkout: (id: string) => send(`/api/workout/${encodeURIComponent(id)}`, 'DELETE'),

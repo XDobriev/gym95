@@ -6,6 +6,7 @@ import { getHistoryPage, getExerciseNames, getProgress, getSummary, getVolumeHis
 import { validateWorkoutInput } from './validateWorkout';
 import { updateWorkout, deleteWorkoutForUser } from './mutations';
 import { getProfileCached } from '../db/profiles';
+import { getBody } from './body';
 
 const MAX_BODY_BYTES = 64 * 1024; // страховка от гигантского тела запроса
 
@@ -124,6 +125,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
 
       case '/api/volume-history':
         sendJson(res, 200, { weeks: await getVolumeHistory(user.userId) });
+        return;
+
+      case '/api/body':
+        sendJson(res, 200, await getBody(user.userId));
         return;
 
       default:

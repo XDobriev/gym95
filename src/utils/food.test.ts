@@ -1,6 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFoodLine, kcalNorm, averagePerDay } from './food';
+import { parseFoodLine, kcalNorm, averagePerDay, parseFoodPrefix, looksLikeFoodDescription } from './food';
+import { parseEstimate } from '../ai/foodEstimate';
+
+test('parseFoodPrefix: вчера и приём пищи без числа', () => {
+  assert.deepEqual(parseFoodPrefix('вчера ужин паста карбонара'), { meal: 'dinner', yesterday: true, rest: 'паста карбонара' });
+  assert.deepEqual(parseFoodPrefix('гречка с курицей, тарелка'), { meal: null, yesterday: false, rest: 'гречка с курицей, тарелка' });
+  assert.deepEqual(parseFoodPrefix('Обед: борщ'), { meal: 'lunch', yesterday: false, rest: 'борщ' });
+});
+
+test('looksLikeFoodDescription', () => {
+  assert.equal(looksLikeFoodDescription('гречка с курицей'), true);
+  assert.equal(looksLikeFoodDescription('ок'), false);
+  assert.equal(looksLikeFoodDescription('123'), false);
+  assert.equal(looksLikeFoodDescription('а'.repeat(201)), false);
+});
+
+test('parseEstimate: валидный ответ модели', () => {
+  assert.deepEqual(
+    parseEstimate('{"isFood":true,"name":"Гречка с курицей","portion":"тарелка ~350 г","kcal":521.4,"proteinG":34.6}'),
+    { isFood: true, name: 'Гречка с курицей', portion: 'тарелка ~350 г', kcal: 521, proteinG: 35 }
+  );
+});
+
+test('parseEstimate: не еда, мусор, ккал вне диапазона, markdown-обёртка', () => {
+  assert.deepEqual(parseEstimate('{"isFood":false}'), { isFood: false });
+  assert.equal(parseEstimate('не json'), null);
+  assert.equal(parseEstimate('{"isFood":true,"name":"x","kcal":99999}'), null);
+  assert.deepEqual(parseEstimate('```json\n{"isFood":true,"name":"Яблоко","kcal":95}\n```'), {
+    isFood: true,
+    name: 'Яблоко',
+    portion: null,
+    kcal: 95,
+    proteinG: null,
+  });
+});
 
 test('parseFoodLine: приём пищи и ккал', () => {
   assert.deepEqual(parseFoodLine('обед 650'), { meal: 'lunch', description: null, kcal: 650, yesterday: false });

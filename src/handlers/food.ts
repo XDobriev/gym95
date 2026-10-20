@@ -1,11 +1,12 @@
 import { Context, Markup, Telegraf } from 'telegraf';
-import { InlineKeyboardButton } from 'telegraf/typings/core/types/typegram';
+import { InlineKeyboardButton, InlineKeyboardMarkup } from 'telegraf/typings/core/types/typegram';
 import { addFood, deleteFood, getFoodBetween, getFoodEntry, updateFoodKcal } from '../db/food';
 import { getUserTimezone } from '../db/profiles';
 import { isModuleEnabled } from '../modules/body';
 import { dayTotalLine, entryLabel, foodAverages, frequentDishes, FrequentDish, getKcalNorm } from '../modules/food';
 import { addDays, localNow } from '../utils/time';
-import { formatKcal, parseFoodLine } from '../utils/food';
+import { formatKcal, looksLikeFoodDescription, Meal, parseFoodLine, parseFoodPrefix } from '../utils/food';
+import { AiError, estimateFood, isAiConfigured } from '../ai/foodEstimate';
 import { getDraft } from './workout/state';
 
 const HINT = 'Еду записывай одной строкой: «обед 650», «перекус 2 яблока 190», «вчера ужин 700».';
@@ -89,6 +90,7 @@ async function sendFoodSummary(ctx: Context, userId: number): Promise<void> {
 }
 
 export function registerFood(bot: Telegraf): void {
+  registerFoodAi(bot);
   bot.command('food', (ctx) => sendFoodSummary(ctx, ctx.from.id));
 
   bot.action(/^fd:q:(\d+)$/, async (ctx) => {
@@ -140,6 +142,7 @@ export function registerFood(bot: Telegraf): void {
     const text = ctx.message.text.trim();
     if (text.startsWith('/')) {
       foodFix.delete(userId);
+      ownKcal.delete(userId);
       return next();
     }
 
@@ -156,19 +159,135 @@ export function registerFood(bot: Telegraf): void {
       return;
     }
 
+    const own = ownKcal.get(userId);
+    if (own) {
+      const kcal = Number(text);
+      if (!Number.isInteger(kcal) || kcal < 20 || kcal > 5000) {
+        await ctx.reply('Нужно целое число ккал от 20 до 5000, например 520.');
+        return;
+      }
+      ownKcal.delete(userId);
+      await recordFood(ctx, userId, { meal: own.meal, description: own.description, kcal }, own.dateStr);
+      return;
+    }
+
     if (getDraft(userId)) return next(); // идёт запись тренировки — текст не про еду
 
     const food = parseFoodLine(text);
+    const foodOn = await isModuleEnabled(userId, 'food');
     if (!food) {
+      if (foodOn && isAiConfigured() && looksLikeFoodDescription(text)) {
+        await estimateWithAi(ctx, userId, text);
+        return;
+      }
       await ctx.reply(`Не понял 🤔\n${HINT}\nВес — /weight 130.4, сон — /sleep 7.5. Все команды — /start`);
       return;
     }
-    if (!(await isModuleEnabled(userId, 'food'))) {
+    if (!foodOn) {
       await ctx.reply('Модуль еды выключен. Включить: /settings → 🧩 Модули.');
       return;
     }
     const today = await todayOf(userId);
     const date = food.yesterday ? addDays(today, -1) : foodDate.get(userId) ?? today;
     await recordFood(ctx, userId, food, date);
+  });
+}
+
+// --- ИИ-оценка: «гречка с курицей, тарелка» → ~520 ккал ---
+
+interface PendingEstimate {
+  meal: Meal | null;
+  description: string;
+  kcal: number;
+  dateStr: string;
+}
+
+const pendingEstimate = new Map<number, PendingEstimate>();
+// «✏️ Своё число» после оценки: ждём ккал для этого описания.
+const ownKcal = new Map<number, Omit<PendingEstimate, 'kcal'>>();
+
+const AI_DAILY_LIMIT = 40; // на пользователя в день — бережём общий бесплатный лимит ключа
+const aiUsage = new Map<number, { day: string; count: number }>();
+
+function takeAiQuota(userId: number, today: string): boolean {
+  const u = aiUsage.get(userId);
+  if (!u || u.day !== today) {
+    aiUsage.set(userId, { day: today, count: 1 });
+    return true;
+  }
+  if (u.count >= AI_DAILY_LIMIT) return false;
+  u.count++;
+  return true;
+}
+
+async function estimateWithAi(ctx: Context, userId: number, text: string): Promise<void> {
+  const today = await todayOf(userId);
+  if (!takeAiQuota(userId, today)) {
+    await ctx.reply(`На сегодня лимит ИИ-оценок исчерпан (${AI_DAILY_LIMIT}). Пиши с числом: «обед 650».`);
+    return;
+  }
+  const { meal, yesterday, rest } = parseFoodPrefix(text);
+  const dateStr = yesterday ? addDays(today, -1) : foodDate.get(userId) ?? today;
+  const progress = await ctx.reply('🤖 Оцениваю калорийность…');
+  const edit = (t: string, extra?: { reply_markup: InlineKeyboardMarkup }) =>
+    ctx.telegram.editMessageText(progress.chat.id, progress.message_id, undefined, t, extra).catch(() => undefined);
+
+  try {
+    const est = await estimateFood(rest);
+    if (!est.isFood) {
+      await edit(`Не похоже на еду 🤔\n${HINT}\nВес — /weight 130.4, сон — /sleep 7.5. Все команды — /start`);
+      return;
+    }
+    const description = est.name.length <= 60 ? est.name : rest.slice(0, 60);
+    pendingEstimate.set(userId, { meal, description, kcal: est.kcal, dateStr });
+    const lines = [
+      `🤖 ${est.name}${est.portion ? ` (${est.portion})` : ''}`,
+      `≈ ${formatKcal(est.kcal)} ккал${est.proteinG !== null ? ` · белок ~${est.proteinG} г` : ''}`,
+      dateStr !== today ? `Запишу за ${ddmm(dateStr)}.` : '',
+      'Это примерная оценка (погрешность 15–25%). Знаешь точнее — нажми «Своё число».',
+    ].filter(Boolean);
+    await edit(lines.join('\n'), {
+      reply_markup: Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Записать', 'ai:ok'), Markup.button.callback('✏️ Своё число', 'ai:own')],
+        [Markup.button.callback('❌ Не то', 'ai:no')],
+      ]).reply_markup,
+    });
+  } catch (err) {
+    console.error('ИИ-оценка еды:', err);
+    const quota = err instanceof AiError && err.kind === 'quota';
+    await edit(
+      quota
+        ? 'Лимит бесплатного ИИ на сегодня закончился. Напиши с числом: «обед 650».'
+        : 'Не получилось оценить (ИИ недоступен). Напиши с числом: «обед 650».'
+    );
+  }
+}
+
+export function registerFoodAi(bot: Telegraf): void {
+  bot.action('ai:ok', async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from.id;
+    const p = pendingEstimate.get(userId);
+    pendingEstimate.delete(userId);
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
+    if (!p) return;
+    await recordFood(ctx, userId, { meal: p.meal, description: p.description, kcal: p.kcal }, p.dateStr);
+  });
+
+  bot.action('ai:own', async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from.id;
+    const p = pendingEstimate.get(userId);
+    pendingEstimate.delete(userId);
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
+    if (!p) return;
+    ownKcal.set(userId, { meal: p.meal, description: p.description, dateStr: p.dateStr });
+    await ctx.reply(`Сколько ккал в «${p.description}»? Например: 480`);
+  });
+
+  bot.action('ai:no', async (ctx) => {
+    await ctx.answerCbQuery('Не записано');
+    pendingEstimate.delete(ctx.from.id);
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
   });
 }

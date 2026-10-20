@@ -4,7 +4,7 @@ import { upsertSleep } from '../../db/sleep';
 import { fmtKg, loadWeightStats, sleepAverage, weightTrendLine } from '../../modules/body';
 import { formatDelta, formatHours, parseSleepHours, parseValueWithDate, parseWeightValue } from '../../utils/body';
 import { buildWeightChartUrl } from '../../utils/chart';
-import { parseFoodLine } from '../../utils/food';
+import { looksLikeFoodDescription, parseFoodLine } from '../../utils/food';
 import { getLastMeasurements } from '../../db/measure';
 import { measureDiffLines } from '../../utils/measure';
 import { localNoonUtc, localNow } from '../../utils/time';
@@ -179,7 +179,8 @@ export function registerBody(bot: Telegraf): void {
     }
 
     // Висящий вопрос про сон/вес не мешает записать еду: «обед 650» уходит дальше, в модуль еды.
-    if (input.kind !== 'weightFix' && parseFoodLine(text)) return next();
+    const isFoodText = parseFoodLine(text) || (looksLikeFoodDescription(text) && !/\d/.test(text));
+    if (input.kind !== 'weightFix' && isFoodText) return next();
 
     const send = ctxSend(ctx);
     if (!(await applyValue(send, userId, input, text))) return;

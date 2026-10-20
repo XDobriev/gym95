@@ -54,6 +54,26 @@ export function parseFoodLine(text: string): FoodLine | null {
   return { meal, description: rest.length ? rest : null, kcal, yesterday };
 }
 
+// Префикс без числа ккал — для ИИ-оценки: «вчера ужин паста» → вчера, ужин, «паста».
+export function parseFoodPrefix(text: string): { meal: Meal | null; yesterday: boolean; rest: string } {
+  let t = text.trim().replace(/\s+/g, ' ');
+  let yesterday = false;
+  if (/^вчера\s/i.test(t)) {
+    yesterday = true;
+    t = t.slice(6).trim();
+  }
+  const firstWord = t.split(' ')[0];
+  const meal = MEAL_WORDS[firstWord.toLowerCase().replace(/[:,]$/, '')] ?? null;
+  const rest = meal ? t.slice(firstWord.length).replace(/^[\s:,—-]+/, '').trim() : t;
+  return { meal, yesterday, rest };
+}
+
+// Похоже ли на описание еды для ИИ: есть буквы, не одна короткая реплика, не простыня.
+export function looksLikeFoodDescription(text: string): boolean {
+  const t = text.trim();
+  return t.length >= 3 && t.length <= 200 && /\p{L}{3,}/u.test(t);
+}
+
 const ACTIVITY_FACTOR = 1.375; // лёгкая активность: тренировки 2–3 раза в неделю
 const GOAL_DELTA: Record<Goal, number> = { lose: -500, gain: 300, regular: 0 };
 

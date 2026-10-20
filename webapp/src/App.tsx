@@ -12,7 +12,10 @@ const ProgressScreen = lazy(() =>
   import('./screens/ProgressScreen').then((m) => ({ default: m.ProgressScreen }))
 );
 
-type Tab = 'history' | 'progress';
+// «Тело» тоже на Recharts — отдельный чанк.
+const BodyScreen = lazy(() => import('./screens/BodyScreen').then((m) => ({ default: m.BodyScreen })));
+
+type Tab = 'history' | 'progress' | 'body';
 
 export function App() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
@@ -112,13 +115,17 @@ export function App() {
           <span className="subtitle">{firstName ? `Привет, ${firstName}` : 'Дневник тренировок'}</span>
         </div>
 
-        {summary && <SummaryBar summary={summary} />}
+        {summary && tab !== 'body' && <SummaryBar summary={summary} />}
 
         {tab === 'history' ? (
           <HistoryScreen onWorkoutsChanged={refreshSummary} onEditingChange={setEditingActive} />
-        ) : (
+        ) : tab === 'progress' ? (
           <Suspense fallback={<Loading />}>
             <ProgressScreen />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<Loading />}>
+            <BodyScreen />
           </Suspense>
         )}
       </div>
@@ -131,6 +138,10 @@ export function App() {
         <button className={`tab${tab === 'progress' ? ' active' : ''}`} onClick={() => switchTab('progress')}>
           <span className="tab-icon">📊</span>
           Прогресс
+        </button>
+        <button className={`tab${tab === 'body' ? ' active' : ''}`} onClick={() => switchTab('body')}>
+          <span className="tab-icon">⚖️</span>
+          Тело
         </button>
       </nav>
     </>

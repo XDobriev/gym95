@@ -59,3 +59,21 @@ export interface VolumeHistoryPoint {
 export interface VolumeHistoryResponse {
   weeks: VolumeHistoryPoint[];
 }
+
+// --- Вкладка «Тело» (GET /api/body) --- зеркало в webapp/shared/types.ts
+export interface BodyResponse {
+  modules: { weight: boolean; sleep: boolean; food: boolean; water: boolean; activity: boolean };
+  weights: { date: string; kg: number }[]; // по одному значению в день, 90 дней
+  weightAvg7: number | null;
+  weightWeekChange: number | null;
+  weightMonthChange: number | null;
+  sleep: { date: string; hours: number }[]; // 30 дней
+  sleepAvg7: number | null;
+  food: { date: string; kcal: number }[]; // сумма за день, 30 дней (только дни с записями)
+  foodAvg7: number | null;
+  kcalNorm: number | null;
+  waterTodayMl: number;
+  waterTargetMl: number;
+  chain: { current: number; best: number; goal: number; deadline: string | null } | null;
+  measurements: { date: string; values: Record<string, number | null> }[]; // последние 2, новые первыми
+}
