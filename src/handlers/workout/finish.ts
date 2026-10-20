@@ -4,6 +4,8 @@ import { addExercise } from '../../db/exercises';
 import { addCardioSession } from '../../db/cardio';
 import { computeAvgPace } from '../../utils/cardio';
 import { formatCardioInline, formatSetsInline } from '../../utils/format';
+import { getUserTimezone } from '../../db/profiles';
+import { localNoonUtc } from '../../utils/time';
 
 export type FinishResult =
   | { ok: true; text: string }
@@ -23,6 +25,7 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
   const workout = await createWorkout({
     userId,
     type: draft.type,
+    date: draft.date ? localNoonUtc(draft.date, await getUserTimezone(userId)) : undefined,
     durationMinutes: draft.cardio?.durationMinutes,
     warmupMinutes: draft.warmupMinutes,
   });
@@ -49,6 +52,11 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
   }
 
   const sections: string[] = [];
+
+  if (draft.date) {
+    const [, m, d] = draft.date.split('-');
+    sections.push(`📅 Дата: ${d}.${m}`);
+  }
 
   if (draft.warmupMinutes !== undefined) {
     sections.push(`🔥 Разминка: ${draft.warmupMinutes} мин`);

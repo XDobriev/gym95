@@ -9,7 +9,7 @@ async function sendProgress(ctx: Context, userId: number, exerciseName: string):
   const history = await getExerciseHistory(userId, exerciseName);
 
   if (history.length === 0) {
-    await ctx.reply(`📭 Пока нет истории по «${exerciseName}».`);
+    await ctx.reply(`📭 Пока нет истории по «${exerciseName}». Запиши его в /new_workout — и здесь появится график.`);
     return;
   }
 

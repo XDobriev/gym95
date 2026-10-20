@@ -1,31 +1,36 @@
 // Состояние ожидания текстового ввода в /settings — отдельно от settings.ts,
 // чтобы activeFlow.ts мог проверять его без циклического импорта хендлера.
-const waitingForTime = new Set<number>();
-const waitingForGoal = new Set<number>();
+type AwaitedInput = 'time' | 'goal' | 'body';
+const awaiting = new Map<number, AwaitedInput>();
 
 export function isWaitingForTime(userId: number): boolean {
-  return waitingForTime.has(userId);
+  return awaiting.get(userId) === 'time';
 }
 
 export function isWaitingForGoal(userId: number): boolean {
-  return waitingForGoal.has(userId);
+  return awaiting.get(userId) === 'goal';
+}
+
+export function isWaitingForBody(userId: number): boolean {
+  return awaiting.get(userId) === 'body';
 }
 
 export function isAwaitingSettingsInput(userId: number): boolean {
-  return waitingForTime.has(userId) || waitingForGoal.has(userId);
+  return awaiting.has(userId);
 }
 
 export function setWaitingForTime(userId: number): void {
-  waitingForGoal.delete(userId);
-  waitingForTime.add(userId);
+  awaiting.set(userId, 'time');
 }
 
 export function setWaitingForGoal(userId: number): void {
-  waitingForTime.delete(userId);
-  waitingForGoal.add(userId);
+  awaiting.set(userId, 'goal');
+}
+
+export function setWaitingForBody(userId: number): void {
+  awaiting.set(userId, 'body');
 }
 
 export function clearAwaitingSettingsInput(userId: number): void {
-  waitingForTime.delete(userId);
-  waitingForGoal.delete(userId);
+  awaiting.delete(userId);
 }

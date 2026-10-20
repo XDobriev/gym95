@@ -31,7 +31,16 @@ export function typeKeyboard(): InlineKeyboardMarkup {
       Markup.button.callback('🏊 Бассейн', 'w:type:pool'),
       Markup.button.callback('🔀 Смешанная', 'w:type:mixed'),
     ],
-    [Markup.button.callback('❌ Отменить', 'w:cancel_workout')],
+    [Markup.button.callback('📅 Другая дата', 'w:date')],
+    [Markup.button.callback('❌ Отменить тренировку', 'w:cancel_workout')],
+  ]).reply_markup;
+}
+
+export function dateKeyboard(): InlineKeyboardMarkup {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('Сегодня', 'w:date:0')],
+    [Markup.button.callback('Вчера', 'w:date:1'), Markup.button.callback('Позавчера', 'w:date:2')],
+    [Markup.button.callback('❌ Отменить тренировку', 'w:cancel_workout')],
   ]).reply_markup;
 }
 
@@ -81,6 +90,10 @@ export function groupExerciseKeyboard(names: string[]): InlineKeyboardMarkup {
     rows.push(nameButtons.slice(i, i + 2));
   }
 
+  // Та же кнопка, что и на верхнем уровне выбора упражнения (exerciseNameKeyboard) —
+  // иначе текст "Добавь упражнение через «✏️ Ввести своё название»" в пустой группе
+  // ссылался бы на кнопку, которой физически нет на этом экране.
+  rows.push([Markup.button.callback('✏️ Ввести своё название', 'w:ex:custom')]);
   rows.push([Markup.button.callback('⬅️ Назад к группам', 'w:muscle_group_back')]);
 
   return Markup.inlineKeyboard(rows).reply_markup;

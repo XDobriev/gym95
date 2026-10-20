@@ -1,5 +1,4 @@
 import { supabase } from './client';
-import { getRecentWorkouts } from './workouts';
 
 export interface UserSettings {
   user_id: number;
@@ -42,31 +41,15 @@ export async function upsertSettings(
   return data as UserSettings;
 }
 
-export async function getUsersNeedingReminder(
-  currentTimeHHMM: string,
-  todayDateStr: string,
-  minDaysSinceLastWorkout: number
-): Promise<number[]> {
-  const { data: rows, error } = await supabase
+export async function getEnabledReminderSettings(): Promise<
+  Pick<UserSettings, 'user_id' | 'reminder_time' | 'last_reminder_sent_date'>[]
+> {
+  const { data, error } = await supabase
     .from('user_settings')
-    .select('user_id, last_reminder_sent_date')
+    .select('user_id, reminder_time, last_reminder_sent_date')
     .eq('reminders_enabled', true)
-    .eq('reminder_time', currentTimeHHMM);
+    .not('reminder_time', 'is', null);
 
-  if (error) throw new Error(`getUsersNeedingReminder: ${error.message}`);
-
-  const candidates = (rows ?? []).filter((r) => r.last_reminder_sent_date !== todayDateStr);
-  if (candidates.length === 0) return [];
-
-  const checked = await Promise.all(
-    candidates.map(async (row) => {
-      const last = await getRecentWorkouts(row.user_id, 1, 0);
-      if (last.length === 0) return row.user_id;
-      // Сырая разница в мс, не календарные дни в MSK — N уже эвристика, не строгий SLA.
-      const daysSince = (Date.now() - new Date(last[0].date).getTime()) / 86_400_000;
-      return daysSince >= minDaysSinceLastWorkout ? row.user_id : null;
-    })
-  );
-
-  return checked.filter((id): id is number => id !== null);
+  if (error) throw new Error(`getEnabledReminderSettings: ${error.message}`);
+  return (data ?? []) as Pick<UserSettings, 'user_id' | 'reminder_time' | 'last_reminder_sent_date'>[];
 }

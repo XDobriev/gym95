@@ -1,8 +1,11 @@
 import { Telegraf, Context } from 'telegraf';
 import { WorkoutType } from '../../types/domain';
-import { getDraft, startDraft, clearDraft, canAddCardio } from './state';
+import { getDraft, startDraft, clearDraft, canAddCardio, DRAFT_CANCELLED_TEXT } from './state';
 import { otherActiveFlow, activeFlowBlockedMessage } from '../activeFlow';
-import { typeKeyboard, resumeOrRestartKeyboard, exerciseSavedMenuKeyboard } from './keyboards';
+import { typeKeyboard, dateKeyboard, resumeOrRestartKeyboard, exerciseSavedMenuKeyboard } from './keyboards';
+import { getUserTimezone } from '../../db/profiles';
+import { addDays, localNow } from '../../utils/time';
+import { parseDayMonth } from '../../utils/parse';
 import { handleTypeChosen, handleWarmupMinutesEntered, handleWarmupSkip, renderWarmupPrompt } from './typeStep';
 import {
   handleExerciseChosenByIndex,
@@ -46,7 +49,7 @@ import {
 } from './cardioStep';
 import { saveDraftWorkout } from './finish';
 
-async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
+export async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
   const userId = ctx.from?.id;
   const chatId = ctx.chat?.id;
   if (!userId || !chatId) return;
@@ -103,7 +106,10 @@ async function renderCurrentStep(ctx: Context, userId: number): Promise<void> {
 
   switch (draft.step) {
     case 'choosing_type':
-      await ctx.editMessageText('Выбери тип тренировки:', { reply_markup: typeKeyboard() });
+      await ctx.editMessageText(typePromptText(draft.date), { reply_markup: typeKeyboard() });
+      return;
+    case 'choosing_date':
+      await ctx.editMessageText(DATE_PROMPT, { reply_markup: dateKeyboard() });
       return;
     case 'entering_warmup':
       await renderWarmupPrompt(ctx);
@@ -168,7 +174,7 @@ async function handleCancelWorkoutAction(ctx: Context): Promise<void> {
   if (!userId) return;
 
   clearDraft(userId);
-  await ctx.editMessageText('Тренировка отменена — в ней ничего не сохранено. Начни заново — /new_workout');
+  await ctx.editMessageText(DRAFT_CANCELLED_TEXT);
 }
 
 async function handleRestartAction(ctx: Context): Promise<void> {
@@ -181,9 +187,43 @@ async function handleRestartAction(ctx: Context): Promise<void> {
   await ctx.editMessageText('Начинаем заново. Выбери тип тренировки:', { reply_markup: typeKeyboard() });
 }
 
+const DATE_PROMPT = '📅 За какой день записать тренировку? Выбери кнопкой или напиши дату дд.мм:';
+
+function typePromptText(date?: string): string {
+  if (!date) return 'Выбери тип тренировки:';
+  const [, m, d] = date.split('-');
+  return `📅 ${d}.${m} · Выбери тип тренировки:`;
+}
+
+async function applyChosenDate(ctx: Context, userId: number, dateStr: string | undefined, viaEdit: boolean): Promise<void> {
+  const draft = getDraft(userId);
+  if (!draft) return;
+  draft.date = dateStr;
+  draft.step = 'choosing_type';
+  const text = typePromptText(dateStr);
+  if (viaEdit) await ctx.editMessageText(text, { reply_markup: typeKeyboard() });
+  else await ctx.reply(text, { reply_markup: typeKeyboard() });
+}
+
 export function registerWorkout(bot: Telegraf): void {
   bot.command('new_workout', handleNewWorkoutCommand);
   bot.command('done', handleDoneCommand);
+
+  bot.action('w:date', async (ctx) => {
+    await ctx.answerCbQuery();
+    const draft = getDraft(ctx.from.id);
+    if (!draft) return;
+    draft.step = 'choosing_date';
+    await ctx.editMessageText(DATE_PROMPT, { reply_markup: dateKeyboard() });
+  });
+
+  bot.action(/^w:date:([0-2])$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from.id;
+    const back = Number(ctx.match[1]);
+    const today = localNow(await getUserTimezone(userId)).dateStr;
+    await applyChosenDate(ctx, userId, back === 0 ? undefined : addDays(today, -back), true);
+  });
 
   bot.action(/^w:type:(cardio|strength|pool|mixed)$/, async (ctx) => {
     await ctx.answerCbQuery();
@@ -315,6 +355,17 @@ export function registerWorkout(bot: Telegraf): void {
     }
 
     const text = 'text' in ctx.message ? ctx.message.text : '';
+
+    if (draft.step === 'choosing_date') {
+      const today = localNow(await getUserTimezone(draft.userId)).dateStr;
+      const parsed = parseDayMonth(text, today);
+      if (!parsed.ok) {
+        await ctx.reply(parsed.error);
+        return;
+      }
+      await applyChosenDate(ctx, draft.userId, parsed.dateStr === today ? undefined : parsed.dateStr, false);
+      return;
+    }
 
     if (draft.step === 'entering_warmup') {
       await handleWarmupMinutesEntered(ctx, text);

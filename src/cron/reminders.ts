@@ -1,58 +1,51 @@
 import cron from 'node-cron';
 import { Telegraf } from 'telegraf';
-import { getUsersNeedingReminder, upsertSettings } from '../db/settings';
+import { getEnabledReminderSettings, upsertSettings } from '../db/settings';
+import { getRecentWorkouts } from '../db/workouts';
+import { getTimezones } from '../db/profiles';
+import { DEFAULT_TZ, localNow } from '../utils/time';
 
-const MOSCOW_TZ = 'Europe/Moscow';
 const MIN_DAYS_SINCE_LAST_WORKOUT = 2;
 const REMINDER_TEXT =
-  'Уже пара дней без тренировки — самое время вернуться в зал 💪\nЗапиши тренировку: /new_workout';
+  'Уже пара дней без тренировки — самое время вернуться 💪\nЗапиши тренировку: /new_workout';
 
-function getMoscowNow(): { hhmm: string; dateStr: string } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: MOSCOW_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date());
-  const get = (type: string) => parts.find((p) => p.type === type)!.value;
-  return { hhmm: `${get('hour')}:${get('minute')}`, dateStr: `${get('year')}-${get('month')}-${get('day')}` };
+async function daysSinceLastWorkout(userId: number): Promise<number> {
+  const [last] = await getRecentWorkouts(userId, 1, 0);
+  if (!last) return Infinity;
+  return (Date.now() - new Date(last.date).getTime()) / 86_400_000;
 }
 
+// Каждую реальную минуту: для каждого пользователя с включёнными напоминаниями
+// сравниваем ЕГО местное время с reminder_time (пояс — из profiles.timezone).
 export function startReminderCron(bot: Telegraf): void {
-  let isRunning = false; // защита от наложения выполнений, если предыдущий тик ещё не завершился
+  let isRunning = false;
 
-  cron.schedule(
-    '* * * * *',
-    async () => {
-      if (isRunning) return;
-      isRunning = true;
-      try {
-        const { hhmm, dateStr } = getMoscowNow();
-        const userIds = await getUsersNeedingReminder(hhmm, dateStr, MIN_DAYS_SINCE_LAST_WORKOUT);
+  cron.schedule('* * * * *', async () => {
+    if (isRunning) return;
+    isRunning = true;
+    try {
+      const rows = await getEnabledReminderSettings();
+      if (rows.length === 0) return;
+      const tzMap = await getTimezones(rows.map((r) => r.user_id));
+      const now = new Date();
 
-        for (const userId of userIds) {
-          try {
-            await bot.telegram.sendMessage(userId, REMINDER_TEXT);
-            await upsertSettings(userId, { last_reminder_sent_date: dateStr });
-          } catch (err) {
-            console.error(`Не удалось отправить напоминание userId=${userId}:`, err);
-          }
+      for (const row of rows) {
+        const { hhmm, dateStr } = localNow(tzMap.get(row.user_id) ?? DEFAULT_TZ, now);
+        if (row.reminder_time !== hhmm || row.last_reminder_sent_date === dateStr) continue;
+        try {
+          if ((await daysSinceLastWorkout(row.user_id)) < MIN_DAYS_SINCE_LAST_WORKOUT) continue;
+          await bot.telegram.sendMessage(row.user_id, REMINDER_TEXT);
+          await upsertSettings(row.user_id, { last_reminder_sent_date: dateStr });
+        } catch (err) {
+          console.error(`Не удалось отправить напоминание userId=${row.user_id}:`, err);
         }
-      } catch (err) {
-        console.error('Ошибка в reminder cron job:', err);
-      } finally {
-        isRunning = false;
       }
-    },
-    // options.timezone влияет на трактовку cron-выражения, а не на бизнес-логику:
-    // при '* * * * *' джоба тикает каждую реальную минуту независимо от TZ.
-    // Сравнение с пользовательским временем суток делается внутри callback через
-    // Intl.DateTimeFormat, т.к. хост-время на Render — UTC.
-    { timezone: MOSCOW_TZ }
-  );
+    } catch (err) {
+      console.error('Ошибка в reminder cron job:', err);
+    } finally {
+      isRunning = false;
+    }
+  });
 
-  console.log('Reminder cron job запущен (Europe/Moscow, проверка каждую минуту)');
+  console.log('Reminder cron job запущен (пояс каждого пользователя, проверка каждую минуту)');
 }

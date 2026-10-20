@@ -3,6 +3,11 @@ import { WorkoutType } from '../../types/domain';
 
 const drafts = new Map<number, DraftWorkout>();
 
+// Общий текст полной отмены черновика — озвучивается и при явной отмене
+// с верхнего уровня (index.ts), и при отмене кардио-блока в одиночной кардио-тренировке
+// (cardioStep.ts), чтобы формулировка не разъезжалась между двумя местами отмены.
+export const DRAFT_CANCELLED_TEXT = 'Тренировка отменена — в ней ничего не сохранено. Начни заново — /new_workout';
+
 const STALE_DRAFT_MS = 6 * 60 * 60 * 1000; // 6 часов
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // раз в час
 

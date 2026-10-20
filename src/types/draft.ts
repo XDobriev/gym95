@@ -2,6 +2,7 @@ import { CardioActivity, WorkoutType } from './domain';
 
 export type WorkoutStep =
   | 'choosing_type'
+  | 'choosing_date'
   | 'entering_warmup'
   | 'choosing_exercise_name'
   | 'choosing_muscle_group'
@@ -39,6 +40,7 @@ export interface DraftWorkout {
   userId: number;
   type: WorkoutType | null;
   step: WorkoutStep;
+  date?: string; // YYYY-MM-DD, местная дата пользователя; нет — «сейчас»
   exercises: DraftExercise[];
   currentExerciseName?: string;
   appendToLastExercise?: boolean;

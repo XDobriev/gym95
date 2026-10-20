@@ -1,6 +1,8 @@
-import { Telegraf, Markup } from 'telegraf';
+import { Telegraf, Markup, Context } from 'telegraf';
 import { getSettings, upsertSettings, UserSettings } from '../db/settings';
+import { getUserTimezone } from '../db/profiles';
 import { pluralizeRu } from '../utils/format';
+import { tzLabel } from '../utils/timezones';
 import { otherActiveFlow, activeFlowBlockedMessage } from './activeFlow';
 import {
   isWaitingForTime,
@@ -9,15 +11,18 @@ import {
   setWaitingForGoal,
   clearAwaitingSettingsInput,
 } from './settingsState';
+import { registerSettingsProfile } from './settingsProfile';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const GOAL_REGEX = /^[1-7]$/;
 
-function settingsText(s: UserSettings): string {
+const MENU_TEXT = '⚙️ Настройки';
+
+function settingsText(s: UserSettings, tz: string): string {
   const status = s.reminders_enabled ? 'включены' : 'выключены';
   const time = s.reminder_time ?? 'не задано';
   const goalWord = pluralizeRu(s.week_goal, ['тренировка', 'тренировки', 'тренировок']);
-  return `⚙️ Настройки\n\nНапоминания: ${status}\nВремя проверки: ${time} (Europe/Moscow)\nЦель недели: ${s.week_goal} ${goalWord}`;
+  return `🏋️ Тренировки\n\nНапоминания: ${status}\nВремя проверки: ${time} (${tzLabel(tz)})\nЦель недели: ${s.week_goal} ${goalWord}`;
 }
 
 function settingsKeyboard(s: UserSettings) {
@@ -30,17 +35,41 @@ function settingsKeyboard(s: UserSettings) {
     ],
     [Markup.button.callback('⏰ Изменить время', 's:time')],
     [Markup.button.callback('🎯 Изменить цель', 's:goal')],
+    [Markup.button.callback('⬅️ Назад', 's:menu')],
   ]).reply_markup;
 }
 
-export function registerSettings(bot: Telegraf): void {
-  bot.command('settings', async (ctx) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
+function menuKeyboard() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('👤 Профиль', 's:profile')],
+    [Markup.button.callback('🏋️ Тренировки', 's:workouts')],
+  ]).reply_markup;
+}
 
-    clearAwaitingSettingsInput(userId);
-    const settings = await getSettings(userId);
-    await ctx.reply(settingsText(settings), { reply_markup: settingsKeyboard(settings) });
+async function showWorkoutSettings(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
+  const [settings, tz] = await Promise.all([getSettings(userId), getUserTimezone(userId)]);
+  const opts = { reply_markup: settingsKeyboard(settings) };
+  if (viaEdit) await ctx.editMessageText(settingsText(settings, tz), opts);
+  else await ctx.reply(settingsText(settings, tz), opts);
+}
+
+export function registerSettings(bot: Telegraf): void {
+  registerSettingsProfile(bot);
+
+  bot.command('settings', async (ctx) => {
+    clearAwaitingSettingsInput(ctx.from.id);
+    await ctx.reply(MENU_TEXT, { reply_markup: menuKeyboard() });
+  });
+
+  bot.action('s:menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    clearAwaitingSettingsInput(ctx.from.id);
+    await ctx.editMessageText(MENU_TEXT, { reply_markup: menuKeyboard() });
+  });
+
+  bot.action('s:workouts', async (ctx) => {
+    await ctx.answerCbQuery();
+    await showWorkoutSettings(ctx, ctx.from.id, true);
   });
 
   bot.action('s:reminders:on', async (ctx) => {
@@ -48,8 +77,8 @@ export function registerSettings(bot: Telegraf): void {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const settings = await upsertSettings(userId, { reminders_enabled: true });
-    await ctx.editMessageText(settingsText(settings), { reply_markup: settingsKeyboard(settings) });
+    await upsertSettings(userId, { reminders_enabled: true });
+    await showWorkoutSettings(ctx, userId, true);
   });
 
   bot.action('s:reminders:off', async (ctx) => {
@@ -57,8 +86,8 @@ export function registerSettings(bot: Telegraf): void {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const settings = await upsertSettings(userId, { reminders_enabled: false });
-    await ctx.editMessageText(settingsText(settings), { reply_markup: settingsKeyboard(settings) });
+    await upsertSettings(userId, { reminders_enabled: false });
+    await showWorkoutSettings(ctx, userId, true);
   });
 
   bot.action('s:time', async (ctx) => {
@@ -73,7 +102,7 @@ export function registerSettings(bot: Telegraf): void {
     }
 
     setWaitingForTime(userId);
-    await ctx.reply('Напиши время в формате ЧЧ:ММ (например, 19:30). Часовой пояс — Europe/Moscow.');
+    await ctx.reply('Напиши время в формате ЧЧ:ММ (например, 19:30). Время — по твоему часовому поясу из профиля.');
   });
 
   bot.action('s:goal', async (ctx) => {
@@ -104,11 +133,10 @@ export function registerSettings(bot: Telegraf): void {
       const n = Number(text);
 
       clearAwaitingSettingsInput(userId);
-      const settings = await upsertSettings(userId, { week_goal: n });
+      await upsertSettings(userId, { week_goal: n });
       const goalWord = pluralizeRu(n, ['тренировка', 'тренировки', 'тренировок']);
-      await ctx.reply(`✅ Готово! Цель недели: ${n} ${goalWord}.`, {
-        reply_markup: settingsKeyboard(settings),
-      });
+      await ctx.reply(`✅ Готово! Цель недели: ${n} ${goalWord}.`);
+      await showWorkoutSettings(ctx, userId, false);
       return;
     }
 
@@ -123,9 +151,8 @@ export function registerSettings(bot: Telegraf): void {
     }
 
     clearAwaitingSettingsInput(userId);
-    const settings = await upsertSettings(userId, { reminder_time: text });
-    await ctx.reply(`✅ Готово! Время обновлено: ${text} (Europe/Moscow).`, {
-      reply_markup: settingsKeyboard(settings),
-    });
+    await upsertSettings(userId, { reminder_time: text });
+    await ctx.reply(`✅ Готово! Время обновлено: ${text}.`);
+    await showWorkoutSettings(ctx, userId, false);
   });
 }

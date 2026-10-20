@@ -33,12 +33,13 @@ export async function setupWebAppMenuButton(bot: Telegraf): Promise<void> {
 export async function setupBotCommands(bot: Telegraf): Promise<void> {
   try {
     await bot.telegram.setMyCommands([
+      { command: 'today', description: 'Сегодня' },
       { command: 'new_workout', description: 'Новая тренировка' },
       { command: 'done', description: 'Завершить и сохранить тренировку' },
       { command: 'history', description: 'История тренировок' },
       { command: 'progress', description: 'Прогресс по упражнению' },
       { command: 'app', description: 'Открыть дневник (Mini App)' },
-      { command: 'settings', description: 'Напоминания' },
+      { command: 'settings', description: 'Профиль и настройки' },
       { command: 'export', description: 'Экспорт истории в markdown' },
     ]);
     console.log('Команды бота зарегистрированы');

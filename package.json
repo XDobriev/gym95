@@ -12,6 +12,7 @@
     "build:webhook": "esbuild src/webhook.ts --bundle --platform=node --target=node22 --outfile=dist/webhook-bundle.js --minify --sourcemap=inline",
     "start": "node dist/bot.js",
     "dev": "tsx watch src/bot.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "set-webhook": "tsx scripts/set-webhook.ts"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 import { Context } from 'telegraf';
 import { DraftWorkout } from '../../types/draft';
-import { getDraft, setStep, clearDraft, canAddCardio } from './state';
+import { getDraft, setStep, clearDraft, canAddCardio, DRAFT_CANCELLED_TEXT } from './state';
 import { formatCardioInline } from '../../utils/format';
 import { renderExerciseMenu } from './exerciseNameStep';
 import {
@@ -262,7 +262,7 @@ function renderCardioSummary(draft: DraftWorkout): string {
     inclinePercent: cardio.inclinePercent ?? null,
   });
 
-  return `✅ Кардио добавлено\n\n${details}`;
+  return `✅ Кардио добавлено!\n\n${details}`;
 }
 
 export async function finalizeCardioBlock(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
@@ -302,5 +302,5 @@ export async function handleCardioCancel(ctx: Context): Promise<void> {
   }
 
   clearDraft(userId);
-  await ctx.editMessageText('Тренировка отменена — в ней ничего не сохранено. Начни заново — /new_workout');
+  await ctx.editMessageText(DRAFT_CANCELLED_TEXT);
 }

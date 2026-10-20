@@ -1,20 +1,21 @@
 import { Telegraf } from 'telegraf';
+import { sendToday } from './today';
 
-const WELCOME_TEXT = `Привет! Это твой дневник тренировок.
-
-Команды:
+const HELP_TEXT = `Команды:
+/today — сегодня: что сделано и что осталось
 /new_workout — начать новую тренировку
 /done — завершить и сохранить текущую тренировку
 /history — последние тренировки
 /progress <упражнение> — история весов/повторений по упражнению
 /export — вся история в markdown (удобно вставить в чат с LLM)
-/settings — напоминания и время ежедневной проверки
-/app — открыть визуальный дневник (Mini App)
+/settings — профиль, напоминания, цель недели
+/app — открыть дневник (Mini App)`;
 
-📖 Кнопка «Дневник» слева от поля ввода открывает историю и графики прогресса.`;
-
+// Сюда доходят только пользователи с профилем: остальных перехватывает
+// middleware доступа (src/handlers/access.ts) и знакомство.
 export function registerStart(bot: Telegraf): void {
   bot.command('start', async (ctx) => {
-    await ctx.reply(WELCOME_TEXT);
+    await ctx.reply(HELP_TEXT);
+    await sendToday(ctx, ctx.from.id);
   });
 }

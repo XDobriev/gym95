@@ -5,6 +5,7 @@ import { validateInitData, AuthError, AuthedUser } from './initData';
 import { getHistoryPage, getExerciseNames, getProgress, getSummary, getVolumeHistory } from './queries';
 import { validateWorkoutInput } from './validateWorkout';
 import { updateWorkout, deleteWorkoutForUser } from './mutations';
+import { getProfileCached } from '../db/profiles';
 
 const MAX_BODY_BYTES = 64 * 1024; // страховка от гигантского тела запроса
 
@@ -64,6 +65,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
   } catch (err) {
     const message = err instanceof AuthError ? err.message : 'Ошибка авторизации';
     sendJson(res, 401, { error: message });
+    return;
+  }
+
+  // Доступ к данным — только у тех, кто прошёл знакомство в боте (вход по приглашению).
+  const profile = await getProfileCached(user.userId).catch(() => null);
+  if (!profile) {
+    sendJson(res, 403, { error: 'Нет доступа. Сначала пройди знакомство в боте.' });
     return;
   }
 
