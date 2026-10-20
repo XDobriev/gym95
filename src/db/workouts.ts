@@ -65,6 +65,19 @@ export async function countWorkoutsSince(userId: number, sinceIso: string): Prom
   return count ?? 0;
 }
 
+// Тренировки в полуинтервале [fromIso, toIso) по возрастанию даты.
+export async function getWorkoutsBetween(userId: number, fromIso: string, toIso: string): Promise<Workout[]> {
+  const { data, error } = await supabase
+    .from('workouts')
+    .select()
+    .eq('user_id', userId)
+    .gte('date', fromIso)
+    .lt('date', toIso)
+    .order('date', { ascending: true });
+  if (error) throw new Error(`getWorkoutsBetween: ${error.message}`);
+  return (data ?? []) as Workout[];
+}
+
 // Только даты всех тренировок пользователя — для подсчёта цепочки.
 export async function getAllWorkoutDates(userId: number): Promise<string[]> {
   const { data, error } = await supabase.from('workouts').select('date').eq('user_id', userId);

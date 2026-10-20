@@ -6,14 +6,30 @@ export interface UserSettings {
   reminder_time: string | null;
   last_reminder_sent_date: string | null;
   week_goal: number;
+  morning_enabled: boolean;
+  morning_time: string;
+  last_morning_date: string | null;
 }
 
-const DEFAULT_SETTINGS: Omit<UserSettings, 'user_id'> = {
+export const DEFAULT_SETTINGS: Omit<UserSettings, 'user_id'> = {
   reminders_enabled: false,
   reminder_time: null,
   last_reminder_sent_date: null,
   week_goal: 3,
+  morning_enabled: true,
+  morning_time: '07:30',
+  last_morning_date: null,
 };
+
+export async function getSettingsForUsers(userIds: number[]): Promise<Map<number, UserSettings>> {
+  const map = new Map<number, UserSettings>();
+  if (userIds.length === 0) return map;
+  const { data, error } = await supabase.from('user_settings').select().in('user_id', userIds);
+  if (error) throw new Error(`getSettingsForUsers: ${error.message}`);
+  for (const row of (data ?? []) as UserSettings[]) map.set(row.user_id, row);
+  for (const id of userIds) if (!map.has(id)) map.set(id, { user_id: id, ...DEFAULT_SETTINGS });
+  return map;
+}
 
 export async function getSettings(userId: number): Promise<UserSettings> {
   const { data, error } = await supabase

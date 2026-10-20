@@ -69,6 +69,15 @@ function finishKeyboard(result: FinishResult) {
 }
 
 export async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
+  await startNewWorkout(ctx);
+}
+
+// Новая тренировка за конкретную прошлую дату (например, «➕ Тренировка за вчера» из утреннего обзора).
+export async function handleNewWorkoutForDate(ctx: Context, dateStr: string): Promise<void> {
+  await startNewWorkout(ctx, dateStr);
+}
+
+async function startNewWorkout(ctx: Context, dateStr?: string): Promise<void> {
   const userId = ctx.from?.id;
   const chatId = ctx.chat?.id;
   if (!userId || !chatId) return;
@@ -88,7 +97,8 @@ export async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
     return;
   }
 
-  startDraft(userId, chatId);
+  const draft = startDraft(userId, chatId);
+  draft.date = dateStr;
   await renderTemplatePicker(ctx, userId, false);
 }
 

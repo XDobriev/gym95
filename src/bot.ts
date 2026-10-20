@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { TelegramError } from 'telegraf';
 import { bot } from './botInstance';
 import { startReminderCron } from './cron/reminders';
+import { startMorningCron } from './cron/morning';
 import { setupWebAppMenuButton, setupBotCommands } from './handlers/webapp';
 import { handleRequest } from './webapp/server';
 
@@ -22,6 +23,7 @@ async function launchWithRetry(attempt = 1): Promise<void> {
     await bot.launch(() => {
       console.log(`gym95 bot запущен (long polling) как @${bot.botInfo?.username}`);
       startReminderCron(bot);
+      startMorningCron(bot);
       void setupWebAppMenuButton(bot);
       void setupBotCommands(bot);
     });

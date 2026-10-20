@@ -28,6 +28,12 @@ export async function getUserTimezone(userId: number): Promise<string> {
   return (await getProfileCached(userId))?.timezone ?? DEFAULT_TZ;
 }
 
+export async function getAllProfileTimezones(): Promise<{ user_id: number; timezone: string }[]> {
+  const { data, error } = await supabase.from('profiles').select('user_id, timezone');
+  if (error) throw new Error(`getAllProfileTimezones: ${error.message}`);
+  return (data ?? []) as { user_id: number; timezone: string }[];
+}
+
 export async function getTimezones(userIds: number[]): Promise<Map<number, string>> {
   const map = new Map<number, string>();
   if (userIds.length === 0) return map;
@@ -78,9 +84,46 @@ export async function updateProfile(
   return data as Profile;
 }
 
-export async function addBodyWeight(userId: number, weightKg: number): Promise<void> {
-  const { error } = await supabase.from('body_weights').insert({ user_id: userId, weight_kg: weightKg });
+// Возвращает id записи — для кнопок «Исправить/Удалить». at — время взвешивания (по умолчанию сейчас).
+export async function addBodyWeight(userId: number, weightKg: number, at?: Date): Promise<string> {
+  const { data, error } = await supabase
+    .from('body_weights')
+    .insert({ user_id: userId, weight_kg: weightKg, measured_at: (at ?? new Date()).toISOString() })
+    .select('id')
+    .single();
   if (error) throw new Error(`addBodyWeight: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+export async function updateBodyWeight(userId: number, id: string, weightKg: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('body_weights')
+    .update({ weight_kg: weightKg })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select('id');
+  if (error) throw new Error(`updateBodyWeight: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+export async function deleteBodyWeight(userId: number, id: string): Promise<boolean> {
+  const { data, error } = await supabase.from('body_weights').delete().eq('id', id).eq('user_id', userId).select('id');
+  if (error) throw new Error(`deleteBodyWeight: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+export async function getWeightsSince(userId: number, sinceIso: string): Promise<{ at: string; kg: number }[]> {
+  const { data, error } = await supabase
+    .from('body_weights')
+    .select('measured_at, weight_kg')
+    .eq('user_id', userId)
+    .gte('measured_at', sinceIso)
+    .order('measured_at', { ascending: true });
+  if (error) throw new Error(`getWeightsSince: ${error.message}`);
+  return ((data ?? []) as { measured_at: string; weight_kg: number | string }[]).map((r) => ({
+    at: r.measured_at,
+    kg: Number(r.weight_kg),
+  }));
 }
 
 export async function getLatestWeight(userId: number): Promise<number | null> {

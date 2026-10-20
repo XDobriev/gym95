@@ -233,3 +233,22 @@ insert into workout_templates (slug, name, type, exercises, cardio, rotation_gro
 on conflict (slug) do update set
   name = excluded.name, type = excluded.type, exercises = excluded.exercises, cardio = excluded.cardio,
   rotation_group = excluded.rotation_group, rotation_order = excluded.rotation_order, sort_order = excluded.sort_order;
+
+-- ===== Этап 2: вес, сон, утренний обзор (2026-10-20) =====
+
+-- Сон за ночь; sleep_date — местная дата утра, когда проснулся. Одна запись на утро.
+create table if not exists sleep_logs (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    bigint not null,
+  sleep_date date not null,
+  hours      numeric(4,2) not null check (hours > 0 and hours <= 16),
+  created_at timestamptz not null default now(),
+  unique (user_id, sleep_date)
+);
+alter table sleep_logs enable row level security;
+
+-- Утренний обзор: «вчера» → сон → вес. Время — по поясу из profiles.timezone.
+alter table user_settings add column if not exists morning_enabled boolean not null default true;
+alter table user_settings add column if not exists morning_time text not null default '07:30'
+  check (morning_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
+alter table user_settings add column if not exists last_morning_date date null;

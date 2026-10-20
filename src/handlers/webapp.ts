@@ -34,6 +34,10 @@ export async function setupBotCommands(bot: Telegraf): Promise<void> {
   try {
     await bot.telegram.setMyCommands([
       { command: 'today', description: 'Сегодня' },
+      { command: 'weight', description: 'Записать вес' },
+      { command: 'sleep', description: 'Записать сон' },
+      { command: 'body', description: 'Вес и сон: сводка и график' },
+      { command: 'morning', description: 'Утренний обзор' },
       { command: 'new_workout', description: 'Новая тренировка' },
       { command: 'done', description: 'Завершить и сохранить тренировку' },
       { command: 'templates', description: 'Шаблоны тренировок' },

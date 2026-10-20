@@ -9,13 +9,14 @@ import { getEditSession } from './workout/editState';
 import { isAwaitingSettingsInput } from './settingsState';
 import { isOnboarding } from './onboarding/state';
 
-export type ActiveFlow = 'draft' | 'edit' | 'settings' | 'onboarding';
+export type ActiveFlow = 'draft' | 'edit' | 'settings' | 'onboarding' | 'body';
 
 const FLOW_MESSAGES: Record<ActiveFlow, string> = {
   draft: '⚠️ У тебя не завершена запись тренировки. Заверши её (/done) или отмени кнопкой в сообщении, прежде чем начать это.',
   edit: '⚠️ У тебя открыто редактирование другой тренировки. Заверши его или нажми «Отмена» в сообщении редактирования, прежде чем начать это.',
   settings: '⚠️ Заверши ввод в /settings (или отправь /settings ещё раз, чтобы сбросить), прежде чем начать это.',
   onboarding: '⚠️ Сначала закончим знакомство — ответь на вопрос выше или отправь /start.',
+  body: '',
 };
 
 // Возвращает активный поток, отличный от exclude (сам себя поток не блокирует —
@@ -25,6 +26,9 @@ export function otherActiveFlow(userId: number, exclude: ActiveFlow): ActiveFlow
   if (exclude !== 'edit' && getEditSession(userId)) return 'edit';
   if (exclude !== 'settings' && isAwaitingSettingsInput(userId)) return 'settings';
   if (exclude !== 'onboarding' && isOnboarding(userId)) return 'onboarding';
+  // Ожидание веса/сна ('body') других не блокирует: утренний вопрос может висеть
+  // весь день. Его текстовый обработчик стоит последним и получает текст, только
+  // если никакой другой поток его не взял. Но сам 'body' не стартует поверх других.
   return null;
 }
 

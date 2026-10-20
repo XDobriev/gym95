@@ -12,6 +12,8 @@ import { registerWorkoutEdit } from './handlers/workout/editStep';
 import { registerTemplateManagement } from './handlers/templates/manage';
 import { registerSettings } from './handlers/settings';
 import { registerWebApp } from './handlers/webapp';
+import { registerMorning } from './handlers/morning';
+import { registerBody } from './handlers/body';
 
 export const bot = new Telegraf(config.BOT_TOKEN);
 
@@ -29,6 +31,9 @@ registerProgress(bot);
 registerExport(bot);
 registerSettings(bot);
 registerWebApp(bot);
+registerMorning(bot);
+// Последним: текстовый обработчик веса/сна забирает текст, только если его не взял никто другой.
+registerBody(bot);
 
 const FAILURE_TEXT = '⚠️ Не получилось выполнить действие — сервис может быть временно недоступен. Попробуй через пару минут.';
 

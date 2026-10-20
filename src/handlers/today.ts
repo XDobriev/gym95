@@ -66,7 +66,7 @@ export async function buildToday(userId: number): Promise<string> {
   return `Сегодня, ${header}\n\n${blocks.join('\n\n')}`;
 }
 
-function todayKeyboard() {
+export function todayKeyboard() {
   const url = resolveWebAppUrl();
   const row = [Markup.button.callback('🏋️ Записать тренировку', 't:new_workout')];
   if (url) return Markup.inlineKeyboard([row, [Markup.button.webApp('📊 Дневник', url)]]).reply_markup;

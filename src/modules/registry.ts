@@ -1,6 +1,7 @@
 import { Goal } from '../types/profile';
 import { ModuleId, UserModuleRow } from '../db/modules';
 import { activityTodaySection } from './activity';
+import { sleepTodaySection, weightTodaySection } from './body';
 
 export interface TodayContext {
   tz: string;
@@ -19,8 +20,9 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   {
     id: 'weight',
-    title: '⚖️ Вес и замеры',
-    available: false,
+    title: '⚖️ Вес',
+    available: true,
+    todaySection: (userId, ctx) => weightTodaySection(userId, ctx.tz, ctx.todayStr),
     defaults: {
       lose: { enabled: true, settings: { promptTime: '07:30', frequency: 'daily' } },
       gain: { enabled: true, settings: { promptTime: '07:30', frequency: 'weekly' } },
@@ -60,8 +62,9 @@ export const MODULES: ModuleDef[] = [
   },
   {
     id: 'sleep',
-    title: '😴 Сон и часы',
-    available: false,
+    title: '😴 Сон',
+    available: true,
+    todaySection: (userId, ctx) => sleepTodaySection(userId, ctx.todayStr),
     defaults: {
       lose: { enabled: false, settings: {} },
       gain: { enabled: true, settings: {} },
