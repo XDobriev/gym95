@@ -6,9 +6,10 @@ import { computeAvgPace } from '../../utils/cardio';
 import { formatCardioInline, formatSetsInline } from '../../utils/format';
 import { getUserTimezone } from '../../db/profiles';
 import { localNoonUtc } from '../../utils/time';
+import { chainAfterSaveText, getChainInfo } from '../../modules/activity';
 
 export type FinishResult =
-  | { ok: true; text: string }
+  | { ok: true; text: string; workoutId: string; canSaveAsTemplate: boolean }
   | { ok: false; text: string };
 
 export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
@@ -28,6 +29,7 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
     date: draft.date ? localNoonUtc(draft.date, await getUserTimezone(userId)) : undefined,
     durationMinutes: draft.cardio?.durationMinutes,
     warmupMinutes: draft.warmupMinutes,
+    templateId: draft.templateId,
   });
 
   for (const exercise of draft.exercises) {
@@ -82,8 +84,18 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
 
   clearDraft(userId);
 
+  // Цепочка — не критичная часть ответа: если не посчиталась, тренировка всё равно сохранена.
+  const chain = await getChainInfo(userId).catch((err) => {
+    console.error('getChainInfo после сохранения тренировки:', err);
+    return null;
+  });
+  if (chain) sections.push(chainAfterSaveText(chain));
+
+  const title = draft.templateName ? `✅ Тренировка «${draft.templateName}» сохранена!` : '✅ Тренировка сохранена!';
   return {
     ok: true,
-    text: `✅ Тренировка сохранена!\n\n${sections.join('\n\n')}\n\nПосмотреть историю — /history`,
+    text: `${title}\n\n${sections.join('\n\n')}\n\nПосмотреть историю — /history`,
+    workoutId: workout.id,
+    canSaveAsTemplate: !draft.templateId && draft.type !== 'pool',
   };
 }

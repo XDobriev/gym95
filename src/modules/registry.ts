@@ -1,5 +1,6 @@
 import { Goal } from '../types/profile';
 import { ModuleId, UserModuleRow } from '../db/modules';
+import { activityTodaySection } from './activity';
 
 export interface TodayContext {
   tz: string;
@@ -29,7 +30,8 @@ export const MODULES: ModuleDef[] = [
   {
     id: 'activity',
     title: '🔗 Активность и цепочка',
-    available: false,
+    available: true,
+    todaySection: (userId) => activityTodaySection(userId),
     defaults: {
       lose: { enabled: true, settings: { chainGoal: 20, maxGapDays: 2 } },
       gain: { enabled: true, settings: { chainGoal: 12, maxGapDays: 2 } },

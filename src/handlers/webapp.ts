@@ -36,6 +36,7 @@ export async function setupBotCommands(bot: Telegraf): Promise<void> {
       { command: 'today', description: 'Сегодня' },
       { command: 'new_workout', description: 'Новая тренировка' },
       { command: 'done', description: 'Завершить и сохранить тренировку' },
+      { command: 'templates', description: 'Шаблоны тренировок' },
       { command: 'history', description: 'История тренировок' },
       { command: 'progress', description: 'Прогресс по упражнению' },
       { command: 'app', description: 'Открыть дневник (Mini App)' },

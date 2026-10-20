@@ -8,6 +8,7 @@ export async function createWorkout(params: {
   durationMinutes?: number;
   notes?: string;
   warmupMinutes?: number;
+  templateId?: string;
 }): Promise<Workout> {
   const { data, error } = await supabase
     .from('workouts')
@@ -18,6 +19,7 @@ export async function createWorkout(params: {
       duration_minutes: params.durationMinutes ?? null,
       notes: params.notes ?? null,
       warmup_minutes: params.warmupMinutes ?? null,
+      template_id: params.templateId ?? null,
     })
     .select()
     .single();
@@ -61,6 +63,13 @@ export async function countWorkoutsSince(userId: number, sinceIso: string): Prom
 
   if (error) throw new Error(`countWorkoutsSince: ${error.message}`);
   return count ?? 0;
+}
+
+// Только даты всех тренировок пользователя — для подсчёта цепочки.
+export async function getAllWorkoutDates(userId: number): Promise<string[]> {
+  const { data, error } = await supabase.from('workouts').select('date').eq('user_id', userId);
+  if (error) throw new Error(`getAllWorkoutDates: ${error.message}`);
+  return ((data ?? []) as { date: string }[]).map((r) => r.date);
 }
 
 export async function getAllWorkoutsForExport(userId: number): Promise<Workout[]> {

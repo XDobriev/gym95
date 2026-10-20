@@ -9,6 +9,7 @@ import { registerProgress } from './handlers/progress';
 import { registerExport } from './handlers/export';
 import { registerWorkout } from './handlers/workout';
 import { registerWorkoutEdit } from './handlers/workout/editStep';
+import { registerTemplateManagement } from './handlers/templates/manage';
 import { registerSettings } from './handlers/settings';
 import { registerWebApp } from './handlers/webapp';
 
@@ -22,6 +23,7 @@ registerStart(bot);
 registerToday(bot);
 registerWorkout(bot);
 registerWorkoutEdit(bot);
+registerTemplateManagement(bot);
 registerHistory(bot);
 registerProgress(bot);
 registerExport(bot);
@@ -31,6 +33,12 @@ registerWebApp(bot);
 const FAILURE_TEXT = '⚠️ Не получилось выполнить действие — сервис может быть временно недоступен. Попробуй через пару минут.';
 
 bot.catch(async (err, ctx) => {
+  // Повторное нажатие той же кнопки перерисовывает сообщение без изменений —
+  // Telegram отвечает 400 «message is not modified». Это не сбой, молча игнорируем.
+  if (err instanceof Error && err.message.includes('message is not modified')) {
+    if (ctx.callbackQuery) await ctx.answerCbQuery().catch(() => undefined);
+    return;
+  }
   console.error(`Ошибка обработки апдейта ${ctx.updateType}:`, err);
   try {
     if (ctx.callbackQuery) await ctx.answerCbQuery('Ошибка, попробуй позже');

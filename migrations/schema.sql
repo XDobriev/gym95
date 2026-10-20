@@ -178,3 +178,58 @@ $$;
 
 revoke execute on function redeem_invite_and_create_profile(bigint, text, text, text, int, int, text, numeric)
   from public, anon, authenticated;
+
+-- ===== Этап 3 (часть): шаблоны тренировок и фулбади (2026-10-20) =====
+
+-- user_id null = готовый шаблон для всех (slug задан), иначе — личный шаблон пользователя.
+-- exercises: [{"name": "...", "sets": [{"weight": 0, "reps": 10}, ...]}] (weight 0 — свой вес;
+-- для планки reps = секунды). cardio: {"activity": "walking", "durationMinutes": 48, "distanceKm": 4}.
+create table if not exists workout_templates (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        bigint null,
+  slug           text null unique,
+  name           text not null,
+  type           text not null check (type in ('strength', 'cardio', 'mixed')),
+  exercises      jsonb not null default '[]'::jsonb,
+  cardio         jsonb null,
+  rotation_group text null,
+  rotation_order int null,
+  sort_order     int not null default 100,
+  created_at     timestamptz not null default now()
+);
+
+create index if not exists idx_workout_templates_user on workout_templates (user_id);
+alter table workout_templates enable row level security;
+
+alter table workouts add column if not exists template_id uuid null
+  references workout_templates (id) on delete set null;
+create index if not exists idx_workouts_user_template on workouts (user_id, template_id, date desc);
+
+insert into workout_templates (slug, name, type, exercises, cardio, rotation_group, rotation_order, sort_order) values
+  ('fullbody_a', 'Фулбади A', 'strength',
+   '[{"name":"Приседания со штангой","sets":[{"weight":0,"reps":10},{"weight":0,"reps":10},{"weight":0,"reps":10}]},
+     {"name":"Жим гантелей лёжа","sets":[{"weight":0,"reps":10},{"weight":0,"reps":10},{"weight":0,"reps":10}]},
+     {"name":"Тяга верхнего блока","sets":[{"weight":0,"reps":12},{"weight":0,"reps":12},{"weight":0,"reps":12}]},
+     {"name":"Махи гантелями в стороны","sets":[{"weight":0,"reps":12},{"weight":0,"reps":12},{"weight":0,"reps":12}]},
+     {"name":"Планка","sets":[{"weight":0,"reps":30},{"weight":0,"reps":30},{"weight":0,"reps":30}]}]'::jsonb,
+   null, 'fullbody', 1, 10),
+  ('fullbody_b', 'Фулбади B', 'strength',
+   '[{"name":"Жим ногами","sets":[{"weight":0,"reps":12},{"weight":0,"reps":12},{"weight":0,"reps":12}]},
+     {"name":"Румынская тяга","sets":[{"weight":0,"reps":10},{"weight":0,"reps":10},{"weight":0,"reps":10}]},
+     {"name":"Жим гантелей сидя","sets":[{"weight":0,"reps":10},{"weight":0,"reps":10},{"weight":0,"reps":10}]},
+     {"name":"Тяга гантели в наклоне","sets":[{"weight":0,"reps":10},{"weight":0,"reps":10},{"weight":0,"reps":10}]},
+     {"name":"Скручивания","sets":[{"weight":0,"reps":15},{"weight":0,"reps":15},{"weight":0,"reps":15}]}]'::jsonb,
+   null, 'fullbody', 2, 20),
+  ('home', 'Дом', 'strength',
+   '[{"name":"Сжимания эспандера","sets":[{"weight":0,"reps":20}]},
+     {"name":"Планка","sets":[{"weight":0,"reps":30}]},
+     {"name":"Отжимания","sets":[{"weight":0,"reps":15}]},
+     {"name":"Приседания","sets":[{"weight":0,"reps":20}]},
+     {"name":"Скручивания на фитболе","sets":[{"weight":0,"reps":15}]}]'::jsonb,
+   null, null, null, 30),
+  ('stadium', 'Стадион', 'cardio', '[]'::jsonb,
+   '{"activity":"walking","durationMinutes":48,"distanceKm":4}'::jsonb,
+   null, null, 40)
+on conflict (slug) do update set
+  name = excluded.name, type = excluded.type, exercises = excluded.exercises, cardio = excluded.cardio,
+  rotation_group = excluded.rotation_group, rotation_order = excluded.rotation_order, sort_order = excluded.sort_order;

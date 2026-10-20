@@ -1,6 +1,10 @@
 import { CardioActivity, WorkoutType } from './domain';
 
 export type WorkoutStep =
+  | 'choosing_template'
+  | 'reviewing_template'
+  | 'editing_template_exercise'
+  | 'editing_template_cardio'
   | 'choosing_type'
   | 'choosing_date'
   | 'entering_warmup'
@@ -41,6 +45,10 @@ export interface DraftWorkout {
   type: WorkoutType | null;
   step: WorkoutStep;
   date?: string; // YYYY-MM-DD, местная дата пользователя; нет — «сейчас»
+  templateId?: string; // тренировка по шаблону — сохраняется в workouts.template_id
+  templateName?: string;
+  templateLastDate?: string; // ISO даты прошлой тренировки по шаблону (откуда подставлены значения)
+  editingIndex?: number; // какое упражнение правится на экране шаблона
   exercises: DraftExercise[];
   currentExerciseName?: string;
   appendToLastExercise?: boolean;

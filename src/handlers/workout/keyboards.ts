@@ -31,7 +31,6 @@ export function typeKeyboard(): InlineKeyboardMarkup {
       Markup.button.callback('🏊 Бассейн', 'w:type:pool'),
       Markup.button.callback('🔀 Смешанная', 'w:type:mixed'),
     ],
-    [Markup.button.callback('📅 Другая дата', 'w:date')],
     [Markup.button.callback('❌ Отменить тренировку', 'w:cancel_workout')],
   ]).reply_markup;
 }

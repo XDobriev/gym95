@@ -1,6 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBodyLine, parseDayMonth } from './parse';
+import { parseBodyLine, parseDayMonth, parseCardioLine } from './parse';
+
+test('parseCardioLine: минуты и км', () => {
+  assert.deepEqual(parseCardioLine('48 4'), { ok: true, minutes: 48, distanceKm: 4 });
+  assert.deepEqual(parseCardioLine('50 4,2'), { ok: true, minutes: 50, distanceKm: 4.2 });
+  assert.deepEqual(parseCardioLine('45'), { ok: true, minutes: 45, distanceKm: null });
+});
+
+test('parseCardioLine: ошибки', () => {
+  assert.equal(parseCardioLine('').ok, false);
+  assert.equal(parseCardioLine('0 4').ok, false);
+  assert.equal(parseCardioLine('48 -1').ok, false);
+  assert.equal(parseCardioLine('сорок').ok, false);
+  assert.equal(parseCardioLine('48 4 5').ok, false);
+});
 
 test('parseBodyLine: пробелы', () => {
   assert.deepEqual(parseBodyLine('182 95 34'), { ok: true, heightCm: 182, weightKg: 95, age: 34 });

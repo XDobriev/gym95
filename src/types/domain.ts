@@ -8,6 +8,7 @@ export interface Workout {
   duration_minutes: number | null;
   notes: string | null;
   warmup_minutes: number | null;
+  template_id?: string | null;
 }
 
 export interface SetEntry {

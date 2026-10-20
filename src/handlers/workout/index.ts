@@ -47,7 +47,26 @@ import {
   askForPulse,
   finalizeCardioBlock,
 } from './cardioStep';
-import { saveDraftWorkout } from './finish';
+import { saveDraftWorkout, FinishResult } from './finish';
+import { Markup } from 'telegraf';
+import {
+  renderTemplatePicker,
+  renderTemplatePreview,
+  handleTemplateChosen,
+  handleTemplateEditExercise,
+  handleTemplateSetsEntered,
+  handleTemplateRemoveExercise,
+  handleTemplateEditCardio,
+  handleTemplateCardioEntered,
+  handleTemplateAddExercise,
+} from '../templates/flow';
+
+// Под сообщением «Тренировка сохранена» — предложение сохранить её как свой шаблон.
+function finishKeyboard(result: FinishResult) {
+  if (!result.ok || !result.canSaveAsTemplate) return undefined;
+  return Markup.inlineKeyboard([[Markup.button.callback('💾 Сохранить как шаблон', `tpl:new:${result.workoutId}`)]])
+    .reply_markup;
+}
 
 export async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
   const userId = ctx.from?.id;
@@ -70,7 +89,7 @@ export async function handleNewWorkoutCommand(ctx: Context): Promise<void> {
   }
 
   startDraft(userId, chatId);
-  await ctx.reply('Выбери тип тренировки:', { reply_markup: typeKeyboard() });
+  await renderTemplatePicker(ctx, userId, false);
 }
 
 async function handleDoneCommand(ctx: Context): Promise<void> {
@@ -84,7 +103,7 @@ async function handleDoneCommand(ctx: Context): Promise<void> {
   }
 
   const result = await saveDraftWorkout(userId);
-  await ctx.reply(result.text);
+  await ctx.reply(result.text, { reply_markup: finishKeyboard(result) });
 }
 
 async function handleFinishAction(ctx: Context): Promise<void> {
@@ -95,7 +114,7 @@ async function handleFinishAction(ctx: Context): Promise<void> {
   if (!draft) return;
 
   const result = await saveDraftWorkout(userId);
-  await ctx.editMessageText(result.text);
+  await ctx.editMessageText(result.text, { reply_markup: finishKeyboard(result) });
 }
 
 // Перерисовывает текущий шаг незавершённой тренировки в это же сообщение —
@@ -105,6 +124,14 @@ async function renderCurrentStep(ctx: Context, userId: number): Promise<void> {
   if (!draft) return;
 
   switch (draft.step) {
+    case 'choosing_template':
+      await renderTemplatePicker(ctx, userId, true);
+      return;
+    case 'reviewing_template':
+    case 'editing_template_exercise':
+    case 'editing_template_cardio':
+      await renderTemplatePreview(ctx, userId, true);
+      return;
     case 'choosing_type':
       await ctx.editMessageText(typePromptText(draft.date), { reply_markup: typeKeyboard() });
       return;
@@ -184,7 +211,7 @@ async function handleRestartAction(ctx: Context): Promise<void> {
 
   clearDraft(userId);
   startDraft(userId, chatId);
-  await ctx.editMessageText('Начинаем заново. Выбери тип тренировки:', { reply_markup: typeKeyboard() });
+  await renderTemplatePicker(ctx, userId, true);
 }
 
 const DATE_PROMPT = '📅 За какой день записать тренировку? Выбери кнопкой или напиши дату дд.мм:';
@@ -195,14 +222,12 @@ function typePromptText(date?: string): string {
   return `📅 ${d}.${m} · Выбери тип тренировки:`;
 }
 
+// Дата выбрана — возвращаемся к выбору шаблона (он показывает выбранную дату).
 async function applyChosenDate(ctx: Context, userId: number, dateStr: string | undefined, viaEdit: boolean): Promise<void> {
   const draft = getDraft(userId);
   if (!draft) return;
   draft.date = dateStr;
-  draft.step = 'choosing_type';
-  const text = typePromptText(dateStr);
-  if (viaEdit) await ctx.editMessageText(text, { reply_markup: typeKeyboard() });
-  else await ctx.reply(text, { reply_markup: typeKeyboard() });
+  await renderTemplatePicker(ctx, userId, viaEdit);
 }
 
 export function registerWorkout(bot: Telegraf): void {
@@ -215,6 +240,41 @@ export function registerWorkout(bot: Telegraf): void {
     if (!draft) return;
     draft.step = 'choosing_date';
     await ctx.editMessageText(DATE_PROMPT, { reply_markup: dateKeyboard() });
+  });
+
+  bot.action('w:scratch', async (ctx) => {
+    await ctx.answerCbQuery();
+    const draft = getDraft(ctx.from.id);
+    if (!draft) return;
+    draft.step = 'choosing_type';
+    await ctx.editMessageText(typePromptText(draft.date), { reply_markup: typeKeyboard() });
+  });
+
+  bot.action(/^tp:use:([0-9a-f-]{36})$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const draft = getDraft(ctx.from.id);
+    if (!draft || draft.step !== 'choosing_template') return;
+    await handleTemplateChosen(ctx, ctx.match[1]);
+  });
+
+  bot.action(/^tp:ed:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleTemplateEditExercise(ctx, Number(ctx.match[1]));
+  });
+
+  bot.action(/^tp:rm:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleTemplateRemoveExercise(ctx, Number(ctx.match[1]));
+  });
+
+  bot.action('tp:cardio', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleTemplateEditCardio(ctx);
+  });
+
+  bot.action('tp:add', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleTemplateAddExercise(ctx);
   });
 
   bot.action(/^w:date:([0-2])$/, async (ctx) => {
@@ -355,6 +415,16 @@ export function registerWorkout(bot: Telegraf): void {
     }
 
     const text = 'text' in ctx.message ? ctx.message.text : '';
+
+    if (draft.step === 'editing_template_exercise') {
+      await handleTemplateSetsEntered(ctx, text);
+      return;
+    }
+
+    if (draft.step === 'editing_template_cardio') {
+      await handleTemplateCardioEntered(ctx, text);
+      return;
+    }
 
     if (draft.step === 'choosing_date') {
       const today = localNow(await getUserTimezone(draft.userId)).dateStr;

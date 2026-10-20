@@ -24,6 +24,27 @@ export function parseBodyLine(text: string): BodyLineResult {
   return { ok: true, heightCm, weightKg, age };
 }
 
+export type CardioLineResult =
+  | { ok: true; minutes: number; distanceKm: number | null }
+  | { ok: false; error: string };
+
+const CARDIO_EXAMPLE = 'Напиши минуты и километры через пробел, например: 48 4 (км можно не писать)';
+
+// «48 4», «50 4,2», «45».
+export function parseCardioLine(text: string): CardioLineResult {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 1 || tokens.length > 2) return { ok: false, error: CARDIO_EXAMPLE };
+
+  const minutes = Number(tokens[0]);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 600) return { ok: false, error: CARDIO_EXAMPLE };
+
+  if (tokens.length === 1) return { ok: true, minutes, distanceKm: null };
+
+  const km = Number(tokens[1].replace(',', '.'));
+  if (!Number.isFinite(km) || km <= 0 || km > 200) return { ok: false, error: CARDIO_EXAMPLE };
+  return { ok: true, minutes, distanceKm: Math.round(km * 100) / 100 };
+}
+
 export type DayMonthResult = { ok: true; dateStr: string } | { ok: false; error: string };
 
 const DATE_EXAMPLE = 'Напиши дату как дд.мм, например 18.10';

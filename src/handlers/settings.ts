@@ -12,6 +12,7 @@ import {
   clearAwaitingSettingsInput,
 } from './settingsState';
 import { registerSettingsProfile } from './settingsProfile';
+import { registerSettingsChain } from './settingsChain';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const GOAL_REGEX = /^[1-7]$/;
@@ -34,7 +35,8 @@ function settingsKeyboard(s: UserSettings) {
       ),
     ],
     [Markup.button.callback('⏰ Изменить время', 's:time')],
-    [Markup.button.callback('🎯 Изменить цель', 's:goal')],
+    [Markup.button.callback('🎯 Изменить цель недели', 's:goal')],
+    [Markup.button.callback('🔗 Цепочка', 's:chain')],
     [Markup.button.callback('⬅️ Назад', 's:menu')],
   ]).reply_markup;
 }
@@ -55,6 +57,7 @@ async function showWorkoutSettings(ctx: Context, userId: number, viaEdit: boolea
 
 export function registerSettings(bot: Telegraf): void {
   registerSettingsProfile(bot);
+  registerSettingsChain(bot);
 
   bot.command('settings', async (ctx) => {
     clearAwaitingSettingsInput(ctx.from.id);
