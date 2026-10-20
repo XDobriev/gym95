@@ -15,6 +15,13 @@ export async function getModules(userId: number): Promise<UserModuleRow[]> {
   return (data ?? []) as UserModuleRow[];
 }
 
+// Строки одного модуля у всех пользователей — для кронов (один запрос в минуту, а не на каждого).
+export async function getModuleRowsForAll(module: ModuleId): Promise<UserModuleRow[]> {
+  const { data, error } = await supabase.from('user_modules').select().eq('module', module);
+  if (error) throw new Error(`getModuleRowsForAll: ${error.message}`);
+  return (data ?? []) as UserModuleRow[];
+}
+
 export async function upsertModules(rows: UserModuleRow[]): Promise<void> {
   if (rows.length === 0) return;
   const { error } = await supabase.from('user_modules').upsert(rows, { onConflict: 'user_id,module' });

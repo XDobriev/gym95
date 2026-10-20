@@ -1,6 +1,6 @@
 // Состояние ожидания текстового ввода в /settings — отдельно от settings.ts,
 // чтобы activeFlow.ts мог проверять его без циклического импорта хендлера.
-type AwaitedInput = 'time' | 'goal' | 'body' | 'chainGoal' | 'morningTime';
+type AwaitedInput = 'time' | 'goal' | 'body' | 'chainGoal' | 'morningTime' | 'waterNorm' | 'waterTimes';
 const awaiting = new Map<number, AwaitedInput>();
 
 export function isWaitingForTime(userId: number): boolean {
@@ -45,6 +45,22 @@ export function isWaitingForMorningTime(userId: number): boolean {
 
 export function setWaitingForMorningTime(userId: number): void {
   awaiting.set(userId, 'morningTime');
+}
+
+export function isWaitingForWaterNorm(userId: number): boolean {
+  return awaiting.get(userId) === 'waterNorm';
+}
+
+export function setWaitingForWaterNorm(userId: number): void {
+  awaiting.set(userId, 'waterNorm');
+}
+
+export function isWaitingForWaterTimes(userId: number): boolean {
+  return awaiting.get(userId) === 'waterTimes';
+}
+
+export function setWaitingForWaterTimes(userId: number): void {
+  awaiting.set(userId, 'waterTimes');
 }
 
 export function clearAwaitingSettingsInput(userId: number): void {

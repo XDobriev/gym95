@@ -14,6 +14,7 @@ import {
 import { registerSettingsProfile } from './settingsProfile';
 import { registerSettingsChain } from './settingsChain';
 import { registerSettingsMorning } from './settingsMorning';
+import { registerSettingsWater } from './settingsWater';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const GOAL_REGEX = /^[1-7]$/;
@@ -47,6 +48,7 @@ function menuKeyboard() {
     [Markup.button.callback('👤 Профиль', 's:profile')],
     [Markup.button.callback('🏋️ Тренировки', 's:workouts')],
     [Markup.button.callback('☀️ Утренний обзор', 's:morning')],
+    [Markup.button.callback('💧 Вода', 's:water')],
     [Markup.button.callback('🧩 Модули', 's:modules')],
   ]).reply_markup;
 }
@@ -62,6 +64,7 @@ export function registerSettings(bot: Telegraf): void {
   registerSettingsProfile(bot);
   registerSettingsChain(bot);
   registerSettingsMorning(bot);
+  registerSettingsWater(bot);
 
   bot.command('settings', async (ctx) => {
     clearAwaitingSettingsInput(ctx.from.id);

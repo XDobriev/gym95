@@ -49,6 +49,7 @@ export interface DraftWorkout {
   templateName?: string;
   templateLastDate?: string; // ISO даты прошлой тренировки по шаблону (откуда подставлены значения)
   editingIndex?: number; // какое упражнение правится на экране шаблона
+  progressHints?: Record<string, number>; // упражнение → предлагаемый вес (прошлый раз все подходы на цель)
   exercises: DraftExercise[];
   currentExerciseName?: string;
   appendToLastExercise?: boolean;

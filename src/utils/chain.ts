@@ -25,6 +25,18 @@ export function computeChain(dates: string[], today: string, maxGapDays: number)
   return { current: run, best, deadline: addDays(last, maxStep) };
 }
 
+// Двойная прогрессия: если во всех подходах с рабочим (максимальным) весом сделано
+// не меньше целевых повторений — предложить следующий вес. null — пока рано.
+export function progressionSuggestion(sets: { weight: number; reps: number }[], targetReps: number | null): number | null {
+  if (!targetReps || sets.length === 0) return null;
+  const working = Math.max(...sets.map((s) => s.weight));
+  if (working <= 0) return null;
+  const workSets = sets.filter((s) => s.weight === working);
+  if (!workSets.every((s) => s.reps >= targetReps)) return null;
+  const step = working < 20 ? 1 : 2.5;
+  return Math.round((working + step) * 10) / 10;
+}
+
 // Следующий шаблон в чередовании (A → B → A …). Неизвестный/пустой прошлый — первый.
 export function suggestNextInRotation(orderedIds: string[], lastUsedId: string | null): string | null {
   if (orderedIds.length === 0) return null;

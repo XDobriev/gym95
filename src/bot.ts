@@ -4,6 +4,7 @@ import { bot } from './botInstance';
 import { startReminderCron } from './cron/reminders';
 import { startMorningCron } from './cron/morning';
 import { startWaterCron } from './cron/water';
+import { startChainCron } from './cron/chain';
 import { setupWebAppMenuButton, setupBotCommands } from './handlers/webapp';
 import { handleRequest } from './webapp/server';
 
@@ -26,6 +27,7 @@ async function launchWithRetry(attempt = 1): Promise<void> {
       startReminderCron(bot);
       startMorningCron(bot);
       startWaterCron(bot);
+      startChainCron(bot);
       void setupWebAppMenuButton(bot);
       void setupBotCommands(bot);
     });

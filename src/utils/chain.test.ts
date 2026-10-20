@@ -1,6 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeChain, suggestNextInRotation } from './chain';
+import { computeChain, suggestNextInRotation, progressionSuggestion } from './chain';
+
+test('progressionSuggestion: все подходы на цель — прибавить вес', () => {
+  const sets = [
+    { weight: 40, reps: 10 },
+    { weight: 40, reps: 10 },
+    { weight: 40, reps: 11 },
+  ];
+  assert.equal(progressionSuggestion(sets, 10), 42.5);
+  assert.equal(progressionSuggestion([{ weight: 16, reps: 12 }, { weight: 16, reps: 12 }], 12), 17); // лёгкий вес — +1
+});
+
+test('progressionSuggestion: не дотянул, без веса, без цели', () => {
+  assert.equal(progressionSuggestion([{ weight: 40, reps: 10 }, { weight: 40, reps: 8 }], 10), null);
+  assert.equal(progressionSuggestion([{ weight: 0, reps: 20 }], 15), null);
+  assert.equal(progressionSuggestion([{ weight: 40, reps: 10 }], null), null);
+  assert.equal(progressionSuggestion([], 10), null);
+  // разный вес в подходах — ориентируемся на рабочий (максимальный) и его подходы
+  assert.equal(progressionSuggestion([{ weight: 30, reps: 12 }, { weight: 40, reps: 10 }, { weight: 40, reps: 10 }], 10), 42.5);
+});
 
 const everyOtherDay = ['2026-10-09', '2026-10-11', '2026-10-13', '2026-10-15', '2026-10-17', '2026-10-19'];
 

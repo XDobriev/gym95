@@ -6,7 +6,7 @@ import { getExercisesByWorkoutId } from '../../db/exercises';
 import { getCardioSessionsForWorkouts } from '../../db/cardio';
 import { getLastWorkoutForTemplates, getTemplate, listTemplates, WorkoutTemplate } from '../../db/templates';
 import { getUserTimezone } from '../../db/profiles';
-import { suggestNextInRotation } from '../../utils/chain';
+import { progressionSuggestion, suggestNextInRotation } from '../../utils/chain';
 import { parseSetsLine } from '../../utils/setsParser';
 import { parseCardioLine } from '../../utils/parse';
 import { formatCardioInline, formatSetsInline } from '../../utils/format';
@@ -88,6 +88,18 @@ export async function handleTemplateChosen(ctx: Context, templateId: string): Pr
     type = last.type === 'pool' ? tpl.type : last.type;
   }
 
+  // Подсказки прогрессии: цель по повторениям — из самого шаблона (максимум повторений в его подходах).
+  const hints: Record<string, number> = {};
+  if (last) {
+    for (const e of exercises) {
+      const planned = tpl.exercises.find((t) => t.name === e.name);
+      const target = planned?.sets.length ? Math.max(...planned.sets.map((s) => s.reps)) : null;
+      const next = progressionSuggestion(e.sets, target);
+      if (next !== null) hints[e.name] = next;
+    }
+  }
+  draft.progressHints = hints;
+
   draft.type = type;
   draft.templateId = tpl.id;
   draft.templateName = tpl.name;
@@ -126,7 +138,11 @@ async function previewText(draft: DraftWorkout, userId: number): Promise<string>
     );
   }
 
-  draft.exercises.forEach((e, i) => lines.push(`${i + 1}. ${e.name} — ${formatSetsInline(e.sets)}`));
+  draft.exercises.forEach((e, i) => {
+    const hint = draft.progressHints?.[e.name];
+    const hintText = hint !== undefined ? `\n   💡 в прошлый раз все подходы на цель — попробуй ${hint.toLocaleString('ru-RU')} кг` : '';
+    lines.push(`${i + 1}. ${e.name} — ${formatSetsInline(e.sets)}${hintText}`);
+  });
   if (draft.exercises.length > 0) lines.push('');
 
   lines.push(
@@ -186,7 +202,10 @@ export async function handleTemplateSetsEntered(ctx: Context, text: string): Pro
     await ctx.reply(parsed.error);
     return;
   }
-  if (ex) ex.sets = parsed.sets;
+  if (ex) {
+    ex.sets = parsed.sets;
+    if (draft.progressHints) delete draft.progressHints[ex.name]; // подходы уже введены — подсказка не нужна
+  }
   await renderTemplatePreview(ctx, userId, false);
 }
 

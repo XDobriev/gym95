@@ -2,9 +2,17 @@ import { getModules } from '../db/modules';
 import { getWaterForDay } from '../db/water';
 import { countWorkoutsSince } from '../db/workouts';
 import { localMidnightUtc } from '../utils/time';
-import { formatLitersShort, waterTargetMl } from '../utils/water';
+import { DEFAULT_WATER_REMINDER_TIMES, formatLitersShort, waterTargetMl } from '../utils/water';
+import { UserModuleRow } from '../db/modules';
 
-const DEFAULT_WATER_ML = 2500;
+export const DEFAULT_WATER_ML = 2500;
+
+export function waterSettingsOf(row: UserModuleRow | undefined): { baseMl: number; times: string[] } {
+  const base = Number(row?.settings.dailyMl ?? DEFAULT_WATER_ML) || DEFAULT_WATER_ML;
+  const raw = row?.settings.reminderTimes;
+  const times = Array.isArray(raw) && raw.every((t) => typeof t === 'string') ? (raw as string[]) : DEFAULT_WATER_REMINDER_TIMES;
+  return { baseMl: base, times };
+}
 
 export interface WaterStatus {
   drunkMl: number;
@@ -18,9 +26,9 @@ export async function getWaterStatus(userId: number, tz: string, today: string):
     getWaterForDay(userId, today),
     countWorkoutsSince(userId, localMidnightUtc(today, tz).toISOString()),
   ]);
-  const base = Number(rows.find((r) => r.module === 'water')?.settings.dailyMl ?? DEFAULT_WATER_ML) || DEFAULT_WATER_ML;
+  const { baseMl } = waterSettingsOf(rows.find((r) => r.module === 'water'));
   const workoutBonus = workoutsToday > 0;
-  return { drunkMl, targetMl: waterTargetMl(base, workoutBonus), workoutBonus };
+  return { drunkMl, targetMl: waterTargetMl(baseMl, workoutBonus), workoutBonus };
 }
 
 function bar(drunk: number, target: number): string {

@@ -1,7 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCm, measureDiffLines, MEASURE_FIELDS, measurementDue } from './measure';
-import { waterTargetMl, waterReminderDue } from './water';
+import { waterTargetMl, waterReminderDue, parseReminderTimes, parseLiters } from './water';
+
+test('parseReminderTimes', () => {
+  assert.deepEqual(parseReminderTimes('10:00, 13:00 16:00'), ['10:00', '13:00', '16:00']);
+  assert.deepEqual(parseReminderTimes('9:30 21:00'), ['09:30', '21:00']);
+  assert.deepEqual(parseReminderTimes('13:00 10:00 13:00'), ['10:00', '13:00']); // сортировка и без повторов
+  assert.equal(parseReminderTimes('25:00'), null);
+  assert.equal(parseReminderTimes(''), null);
+  assert.equal(parseReminderTimes('10 13'), null);
+});
+
+test('parseLiters', () => {
+  assert.equal(parseLiters('2.75'), 2750);
+  assert.equal(parseLiters('2,5'), 2500);
+  assert.equal(parseLiters('3'), 3000);
+  assert.equal(parseLiters('0.5'), null);
+  assert.equal(parseLiters('7'), null);
+});
 
 test('parseCm', () => {
   assert.equal(parseCm('118'), 118);
@@ -33,7 +50,9 @@ test('waterTargetMl: +500 в день тренировки', () => {
 });
 
 test('waterReminderDue: в своё время, если норма не набрана', () => {
-  assert.equal(waterReminderDue('13:00', 1000, 2500), true);
-  assert.equal(waterReminderDue('13:01', 1000, 2500), false);
-  assert.equal(waterReminderDue('16:00', 2500, 2500), false);
+  const times = ['10:00', '13:00', '16:00', '19:00'];
+  assert.equal(waterReminderDue('13:00', 1000, 2500, times), true);
+  assert.equal(waterReminderDue('13:01', 1000, 2500, times), false);
+  assert.equal(waterReminderDue('16:00', 2500, 2500, times), false);
+  assert.equal(waterReminderDue('11:00', 0, 2500, ['11:00']), true);
 });
