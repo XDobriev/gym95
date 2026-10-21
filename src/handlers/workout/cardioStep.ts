@@ -6,6 +6,7 @@ import { renderExerciseMenu } from './exerciseNameStep';
 import {
   activityKeyboard,
   cardioDurationQuickKeyboard,
+  cardioDistanceKeyboard,
   optionalSkipKeyboard,
   cardioDoneKeyboard,
   cardioDoneMixedKeyboard,
@@ -106,18 +107,26 @@ export async function renderCardioDurationResume(ctx: Context, userId: number): 
 export async function proceedAfterDuration(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
   const draft = getDraft(userId);
   setStep(userId, 'entering_cardio_distance');
-  const text = '📏 Дистанция в километрах? Введи число или пропусти:';
-  const reply_markup = optionalSkipKeyboard(
-    'w:cardio_skip_distance',
-    'w:cardio_cancel',
-    draft ? cardioCancelLabel(draft) : undefined
-  );
+  const text = '📏 Дистанция в км или кругах стадиона (например: 4.5 или «10 кругов»)? Выбери или введи:';
+  const reply_markup = cardioDistanceKeyboard(draft ? cardioCancelLabel(draft) : undefined);
 
   if (viaEdit) {
     await ctx.editMessageText(text, { reply_markup });
   } else {
     await ctx.reply(text, { reply_markup });
   }
+}
+
+export async function handleCardioLapsChosen(ctx: Context, laps: number): Promise<void> {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  const draft = getDraft(userId);
+  if (!draft || !draft.cardio) return;
+
+  const distanceKm = Math.round(laps * 0.4 * 100) / 100;
+  draft.cardio.distanceKm = distanceKm;
+  await proceedAfterDistance(ctx, userId, true);
 }
 
 export async function handleCardioDistanceEntered(ctx: Context, text: string): Promise<void> {
@@ -127,11 +136,19 @@ export async function handleCardioDistanceEntered(ctx: Context, text: string): P
   const draft = getDraft(userId);
   if (!draft || !draft.cardio) return;
 
-  const distance = parseFloat(text.trim().replace(',', '.'));
+  const lapsMatch = text.trim().match(/^(\d+(?:[.,]\d+)?)\s*(?:круг(?:а|ов)?|кр|к|laps?)$/i);
+  let distance = 0;
+  if (lapsMatch) {
+    const laps = parseFloat(lapsMatch[1].replace(',', '.'));
+    distance = Math.round(laps * 0.4 * 100) / 100;
+  } else {
+    distance = parseFloat(text.trim().replace(',', '.'));
+  }
+
   if (!Number.isFinite(distance) || distance <= 0) {
     await ctx.reply(
-      'Введи число километров больше нуля, например 5 или 5.5, либо нажми «⏭️ Пропустить»',
-      { reply_markup: optionalSkipKeyboard('w:cardio_skip_distance', 'w:cardio_cancel', cardioCancelLabel(draft)) }
+      'Введи километры (например 4.5) или круги стадиона (например «10 кругов»), либо нажми кнопку ниже:',
+      { reply_markup: cardioDistanceKeyboard(cardioCancelLabel(draft)) }
     );
     return;
   }

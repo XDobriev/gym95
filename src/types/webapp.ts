@@ -44,6 +44,10 @@ export interface ProgressPoint {
   date: string;
   maxWeight: number;
   volumeKg: number;
+  maxReps?: number;
+  totalReps?: number;
+  distanceKm?: number;
+  durationMinutes?: number;
 }
 
 export interface ProgressResponse {

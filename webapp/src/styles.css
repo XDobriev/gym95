@@ -789,3 +789,384 @@ select {
   color: var(--tg-hint);
   margin: 10px 4px 0;
 }
+
+/* --- Вкладка «Таймер» --- */
+.timer-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.timer-mode-selector {
+  display: flex;
+  background: var(--tg-secondary-bg);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.timer-mode-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  color: var(--tg-hint);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.timer-mode-btn.active {
+  background: var(--tg-bg);
+  color: var(--lime-ink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.timer-card {
+  background: var(--tg-secondary-bg);
+  border-radius: var(--card-radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+
+.timer-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.preset-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 30%, transparent);
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preset-btn.selected {
+  border-color: var(--lime-ink);
+  background: color-mix(in srgb, var(--lime) 15%, transparent);
+  color: var(--lime-ink);
+}
+
+.circular-timer-container {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px auto;
+}
+
+.timer-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.timer-circle-bg {
+  fill: none;
+  stroke: color-mix(in srgb, var(--tg-hint) 20%, transparent);
+  stroke-width: 8;
+}
+
+.timer-circle-fg {
+  fill: none;
+  stroke: var(--lime);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.timer-center-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timer-digits {
+  font-family: var(--font-display);
+  font-size: 48px;
+  letter-spacing: 0.05em;
+  color: var(--tg-text);
+  line-height: 1;
+}
+
+.timer-sublabel {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--tg-hint);
+  margin-top: 6px;
+}
+
+.timer-adjust-row {
+  display: flex;
+  gap: 10px;
+}
+
+.adjust-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 30%, transparent);
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.timer-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.timer-main-btn {
+  flex: 2;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  font-family: var(--font-label);
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.timer-main-btn:active {
+  transform: scale(0.98);
+}
+
+.timer-main-btn.start {
+  background: var(--lime);
+  color: #000;
+  box-shadow: var(--glow);
+}
+
+.timer-main-btn.pause {
+  background: #ffaa00;
+  color: #000;
+}
+
+.timer-secondary-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 30%, transparent);
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.timer-secondary-btn.lap-btn {
+  background: color-mix(in srgb, var(--teal) 15%, transparent);
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+/* Stopwatch & Laps */
+.stopwatch-display {
+  padding: 20px 0;
+}
+
+.stopwatch-digits {
+  font-family: var(--font-display);
+  font-size: 56px;
+  line-height: 1;
+  color: var(--tg-text);
+  letter-spacing: 0.04em;
+}
+
+.stopwatch-summary {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--teal);
+}
+
+.laps-section {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.laps-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.laps-header h3 {
+  font-size: 14px;
+  margin: 0;
+  color: var(--tg-text);
+}
+
+.copy-laps-btn {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--teal) 40%, transparent);
+  border-radius: 6px;
+  color: var(--teal);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.laps-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.lap-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr 1.5fr;
+  padding: 8px 10px;
+  background: var(--tg-bg);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font-label);
+  font-weight: 600;
+  color: var(--tg-text);
+}
+
+.lap-row.head {
+  background: transparent;
+  color: var(--tg-hint);
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.lap-row.best-lap {
+  border: 1px solid var(--lime);
+  background: color-mix(in srgb, var(--lime) 10%, var(--tg-bg));
+  color: var(--lime-ink);
+}
+
+/* HIIT Settings & Banner */
+.hiit-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.setting-box {
+  background: var(--tg-bg);
+  padding: 8px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setting-box label {
+  font-size: 11px;
+  color: var(--tg-hint);
+  font-family: var(--font-label);
+  font-weight: 700;
+}
+
+.counter-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.counter-controls button {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 30%, transparent);
+  background: var(--tg-secondary-bg);
+  color: var(--tg-text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.counter-controls span {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.hiit-banner {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.hiit-banner.work {
+  background: color-mix(in srgb, var(--lime) 20%, transparent);
+  border: 1px solid var(--lime);
+}
+
+.hiit-banner.rest {
+  background: color-mix(in srgb, var(--teal) 20%, transparent);
+  border: 1px solid var(--teal);
+}
+
+.hiit-banner.finished {
+  background: color-mix(in srgb, #ff7a1a 20%, transparent);
+  border: 1px solid #ff7a1a;
+}
+
+.hiit-phase-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 0.05em;
+  color: var(--tg-text);
+}
+
+.hiit-round-info {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tg-hint);
+}
+
+.hiit-digits-container {
+  padding: 10px 0;
+}
+

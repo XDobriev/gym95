@@ -2,7 +2,7 @@ import { supabase } from '../db/client';
 import { getSettings } from '../db/settings';
 import { getUserTimezone } from '../db/profiles';
 import { addDays, localMidnightUtc, localWeekStart, weekStartOf } from '../utils/time';
-import { SetEntry } from '../types/domain';
+import { SetEntry, CardioActivity } from '../types/domain';
 import {
   WorkoutDTO,
   ExerciseDTO,
@@ -103,18 +103,53 @@ async function fetchCardio(workoutIds: string[]): Promise<Map<string, CardioDTO[
   return map;
 }
 
+const CARDIO_WEB_MAP: Record<string, CardioActivity> = {
+  '🏃 Бег (кардио)': 'running',
+  '🚶 Ходьба / Стадион (кардио)': 'walking',
+  '🎽 Беговая дорожка (кардио)': 'treadmill',
+  '🚴 Велосипед (кардио)': 'bike',
+  '🏊 Бассейн (кардио)': 'pool',
+};
+
+const CARDIO_REVERSE_MAP: Record<CardioActivity, string> = {
+  running: '🏃 Бег (кардио)',
+  walking: '🚶 Ходьба / Стадион (кардио)',
+  treadmill: '🎽 Беговая дорожка (кардио)',
+  bike: '🚴 Велосипед (кардио)',
+  pool: '🏊 Бассейн (кардио)',
+};
+
 // --- Список названий упражнений пользователя (для выпадашки прогресса) ---
 export async function getExerciseNames(userId: number, limit: number): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('exercises')
-    .select('name, workouts!inner(user_id, date)')
-    .eq('workouts.user_id', userId)
-    .order('date', { foreignTable: 'workouts', ascending: false })
-    .limit(300);
+  const [{ data, error }, { data: cardioData }] = await Promise.all([
+    supabase
+      .from('exercises')
+      .select('name, workouts!inner(user_id, date)')
+      .eq('workouts.user_id', userId)
+      .order('date', { foreignTable: 'workouts', ascending: false })
+      .limit(300),
+    supabase
+      .from('cardio_sessions')
+      .select('activity, workouts!inner(user_id, date)')
+      .eq('workouts.user_id', userId)
+      .order('date', { foreignTable: 'workouts', ascending: false })
+      .limit(50),
+  ]);
   if (error) throw new Error(`getExerciseNames: ${error.message}`);
 
   const seen = new Set<string>();
   const names: string[] = [];
+
+  if (cardioData) {
+    for (const row of cardioData as unknown as { activity: CardioActivity }[]) {
+      const label = CARDIO_REVERSE_MAP[row.activity];
+      if (label && !seen.has(label)) {
+        seen.add(label);
+        names.push(label);
+      }
+    }
+  }
+
   for (const row of (data ?? []) as { name: string }[]) {
     if (!seen.has(row.name)) {
       seen.add(row.name);
@@ -127,6 +162,31 @@ export async function getExerciseNames(userId: number, limit: number): Promise<s
 
 // --- Прогресс по упражнению: макс. вес и объём за каждую сессию ---
 export async function getProgress(userId: number, exerciseName: string): Promise<ProgressPoint[]> {
+  const cardioActivity = CARDIO_WEB_MAP[exerciseName];
+  if (cardioActivity) {
+    const { data: cardioRows, error: cardioError } = await supabase
+      .from('cardio_sessions')
+      .select('distance_km, workouts!inner(user_id, date, duration_minutes)')
+      .eq('workouts.user_id', userId)
+      .eq('activity', cardioActivity)
+      .order('date', { foreignTable: 'workouts', ascending: true });
+    if (cardioError) throw new Error(`getProgress/cardio: ${cardioError.message}`);
+
+    return ((cardioRows ?? []) as unknown as {
+      distance_km: number | null;
+      workouts: { date: string; duration_minutes: number | null } | { date: string; duration_minutes: number | null }[];
+    }[]).map((row) => {
+      const workout = Array.isArray(row.workouts) ? row.workouts[0] : row.workouts;
+      return {
+        date: workout?.date ?? '',
+        maxWeight: 0,
+        volumeKg: 0,
+        distanceKm: row.distance_km !== null ? Number(row.distance_km) : 0,
+        durationMinutes: workout?.duration_minutes ?? 0,
+      };
+    });
+  }
+
   const { data, error } = await supabase
     .from('exercises')
     .select('sets, workouts!inner(user_id, date)')
@@ -145,7 +205,9 @@ export async function getProgress(userId: number, exerciseName: string): Promise
     const sets = row.sets ?? [];
     const maxWeight = sets.length ? Math.max(...sets.map((s) => s.weight)) : 0;
     const volumeKg = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
-    return { date: workout?.date ?? '', maxWeight, volumeKg };
+    const maxReps = sets.length ? Math.max(...sets.map((s) => s.reps)) : 0;
+    const totalReps = sets.reduce((sum, s) => sum + s.reps, 0);
+    return { date: workout?.date ?? '', maxWeight, volumeKg, maxReps, totalReps };
   });
 }
 

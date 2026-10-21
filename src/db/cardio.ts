@@ -105,3 +105,70 @@ export async function getCardioSessionsForWorkouts(workoutIds: string[]): Promis
   if (error) throw new Error(`getCardioSessionsForWorkouts: ${error.message}`);
   return (data ?? []) as CardioSession[];
 }
+
+export interface CardioHistoryPoint {
+  date: string;
+  activity: CardioActivity;
+  durationMinutes: number | null;
+  distanceKm: number | null;
+  avgHeartRate: number | null;
+  avgPace: string | null;
+}
+
+// Хронологическая история кардио-сессий пользователя по конкретному типу активности
+export async function getCardioHistory(
+  userId: number,
+  activity?: CardioActivity
+): Promise<CardioHistoryPoint[]> {
+  let query = supabase
+    .from('cardio_sessions')
+    .select('activity, distance_km, avg_heart_rate, avg_pace, workouts!inner(user_id, date, duration_minutes)')
+    .eq('workouts.user_id', userId)
+    .order('date', { foreignTable: 'workouts', ascending: true });
+
+  if (activity) {
+    query = query.eq('activity', activity);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`getCardioHistory: ${error.message}`);
+
+  return ((data ?? []) as unknown as {
+    activity: CardioActivity;
+    distance_km: number | null;
+    avg_heart_rate: number | null;
+    avg_pace: string | null;
+    workouts: { date: string; duration_minutes: number | null } | { date: string; duration_minutes: number | null }[];
+  }[]).map((row) => {
+    const workout = Array.isArray(row.workouts) ? row.workouts[0] : row.workouts;
+    return {
+      date: workout?.date ?? '',
+      activity: row.activity,
+      durationMinutes: workout?.duration_minutes ?? null,
+      distanceKm: row.distance_km !== null ? Number(row.distance_km) : null,
+      avgHeartRate: row.avg_heart_rate,
+      avgPace: row.avg_pace,
+    };
+  });
+}
+
+// Последние использованные типы кардио-активностей пользователя
+export async function getLastCardioActivitiesByUser(userId: number): Promise<CardioActivity[]> {
+  const { data, error } = await supabase
+    .from('cardio_sessions')
+    .select('activity, workouts!inner(user_id, date)')
+    .eq('workouts.user_id', userId)
+    .order('date', { foreignTable: 'workouts', ascending: false })
+    .limit(20);
+
+  if (error) throw new Error(`getLastCardioActivitiesByUser: ${error.message}`);
+  const seen = new Set<CardioActivity>();
+  const list: CardioActivity[] = [];
+  for (const row of (data ?? []) as { activity: CardioActivity }[]) {
+    if (!seen.has(row.activity)) {
+      seen.add(row.activity);
+      list.push(row.activity);
+    }
+  }
+  return list;
+}

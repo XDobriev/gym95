@@ -106,6 +106,11 @@ export function enteringSetsKeyboard(): InlineKeyboardMarkup {
 
 export function exerciseSavedMenuKeyboard(showAddCardio = false): InlineKeyboardMarkup {
   const rows = [
+    [
+      Markup.button.callback('⏱ Отдых 60с', 'w:rest:60'),
+      Markup.button.callback('⏱ 90с', 'w:rest:90'),
+      Markup.button.callback('⏱ 120с', 'w:rest:120'),
+    ],
     [Markup.button.callback('➕ Ещё подход', 'w:add_more_sets')],
     [Markup.button.callback('🔁 Повторить последний подход', 'w:repeat_last')],
     [Markup.button.callback('➡️ Следующее упражнение', 'w:next_exercise')],
@@ -134,6 +139,18 @@ export function activityKeyboard(): InlineKeyboardMarkup {
 export function cardioDurationQuickKeyboard(): InlineKeyboardMarkup {
   return Markup.inlineKeyboard([
     [Markup.button.callback('✅ 30 мин', 'w:cardio_duration_default')],
+  ]).reply_markup;
+}
+
+export function cardioDistanceKeyboard(cancelLabel = '❌ Отмена'): InlineKeyboardMarkup {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('🏟 5 кр (2 км)', 'w:cardio_laps:5'),
+      Markup.button.callback('🏟 10 кр (4 км)', 'w:cardio_laps:10'),
+      Markup.button.callback('🏟 12 кр (4.8 км)', 'w:cardio_laps:12'),
+    ],
+    [Markup.button.callback('⏭️ Пропустить', 'w:cardio_skip_distance')],
+    [Markup.button.callback(cancelLabel, 'w:cardio_cancel')],
   ]).reply_markup;
 }
 

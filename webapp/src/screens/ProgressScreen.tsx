@@ -89,6 +89,33 @@ export function ProgressScreen() {
     [points]
   );
 
+  const isCardio = selected.includes('(кардио)');
+  const hasDistance = useMemo(
+    () => isCardio && (points?.some((p) => (p.distanceKm ?? 0) > 0) ?? false),
+    [isCardio, points]
+  );
+  const isBodyweight = useMemo(
+    () => !isCardio && points !== null && points.length > 0 && maxOverall === 0,
+    [isCardio, points, maxOverall]
+  );
+
+  const maxOverallReps = useMemo(
+    () => (points && points.length ? Math.max(...points.map((p) => p.maxReps ?? 0)) : 0),
+    [points]
+  );
+
+  const chartMetricKey = isCardio
+    ? (hasDistance ? 'distanceKm' : 'durationMinutes')
+    : (isBodyweight ? 'maxReps' : 'maxWeight');
+
+  const chartTitle = isCardio
+    ? (hasDistance ? 'Дистанция, км' : 'Длительность, мин')
+    : (isBodyweight ? 'Максимальные повторения, шт' : 'Максимальный вес, кг');
+
+  const tooltipUnit = isCardio
+    ? (hasDistance ? 'км' : 'мин')
+    : (isBodyweight ? 'повт' : 'кг');
+
   const switchTab = (next: ProgressTab) => {
     if (next === tab) return;
     haptic('light');
@@ -104,7 +131,7 @@ export function ProgressScreen() {
       <EmptyState
         emoji="📈"
         title="Пока нечего показать"
-        message="Добавь силовую тренировку через бота — и здесь появится график роста весов."
+        message="Запиши тренировку через бота — и здесь появится график прогресса."
       />
     );
   }
@@ -121,7 +148,7 @@ export function ProgressScreen() {
           className={`progress-tab${tab === 'exercise' ? ' active' : ''}`}
           onClick={() => switchTab('exercise')}
         >
-          По упражнению
+          По упражнению / кардио
         </button>
         <button
           role="tab"
@@ -136,7 +163,7 @@ export function ProgressScreen() {
       {tab === 'exercise' ? (
         <>
           <div className="select-wrap">
-            <label htmlFor="exercise-select">Упражнение</label>
+            <label htmlFor="exercise-select">Упражнение или кардио</label>
             <select
               id="exercise-select"
               value={selected}
@@ -157,7 +184,7 @@ export function ProgressScreen() {
           ) : (
             <>
               <div className="chart-card">
-                <div className="chart-title">Максимальный вес, кг</div>
+                <div className="chart-title">{chartTitle}</div>
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: -18 }}>
                     <defs>
@@ -181,7 +208,6 @@ export function ProgressScreen() {
                       tickLine={false}
                       axisLine={false}
                       width={44}
-                      domain={['dataMin - 5', 'dataMax + 5']}
                     />
                     <Tooltip
                       contentStyle={{
@@ -192,11 +218,11 @@ export function ProgressScreen() {
                         color: 'var(--tg-text)',
                       }}
                       labelStyle={{ color: 'var(--tg-hint)' }}
-                      formatter={(v: number) => [`${v} кг`, 'макс']}
+                      formatter={(v: number) => [`${v} ${tooltipUnit}`, 'результат']}
                     />
                     <Line
                       type="monotone"
-                      dataKey="maxWeight"
+                      dataKey={chartMetricKey}
                       stroke="var(--lime-ink)"
                       strokeWidth={2.5}
                       dot={{ r: 3, fill: 'var(--lime-ink)', strokeWidth: 0 }}
@@ -208,14 +234,25 @@ export function ProgressScreen() {
               </div>
 
               <div className="session-list">
-                {[...points].reverse().map((p, i) => (
-                  <div key={i} className="session-row">
-                    <span className="session-date">{formatDateDDMM(p.date)}</span>
-                    <span className={`session-max${p.maxWeight === maxOverall && maxOverall > 0 ? ' pr' : ''}`}>
-                      {p.maxWeight} кг{p.maxWeight === maxOverall && maxOverall > 0 ? ' 🏆' : ''}
-                    </span>
-                  </div>
-                ))}
+                {[...points].reverse().map((p, i) => {
+                  let valueText = `${p.maxWeight} кг`;
+                  let isPr = p.maxWeight === maxOverall && maxOverall > 0;
+                  if (isCardio) {
+                    valueText = hasDistance ? `${p.distanceKm ?? 0} км` : `${p.durationMinutes ?? 0} мин`;
+                    isPr = false;
+                  } else if (isBodyweight) {
+                    valueText = `${p.maxReps ?? 0} повт`;
+                    isPr = (p.maxReps ?? 0) === maxOverallReps && maxOverallReps > 0;
+                  }
+                  return (
+                    <div key={i} className="session-row">
+                      <span className="session-date">{formatDateDDMM(p.date)}</span>
+                      <span className={`session-max${isPr ? ' pr' : ''}`}>
+                        {valueText}{isPr ? ' 🏆' : ''}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}

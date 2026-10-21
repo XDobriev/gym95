@@ -59,7 +59,7 @@ export const MODULES: ModuleDef[] = [
     available: true,
     todaySection: (userId, ctx) => foodTodaySection(userId, ctx.todayStr),
     defaults: {
-      lose: { enabled: false, settings: {} },
+      lose: { enabled: true, settings: {} },
       gain: { enabled: true, settings: {} },
       regular: { enabled: false, settings: {} },
     },
@@ -70,7 +70,7 @@ export const MODULES: ModuleDef[] = [
     available: true,
     todaySection: (userId, ctx) => sleepTodaySection(userId, ctx.todayStr),
     defaults: {
-      lose: { enabled: false, settings: {} },
+      lose: { enabled: true, settings: {} },
       gain: { enabled: true, settings: {} },
       regular: { enabled: false, settings: {} },
     },

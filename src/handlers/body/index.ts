@@ -160,8 +160,8 @@ export function registerBody(bot: Telegraf): void {
   });
 
   bot.action(/^wt:del:([0-9a-f-]{36})$/, async (ctx) => {
+    await ctx.answerCbQuery();
     const ok = await deleteBodyWeight(ctx.from.id, ctx.match[1]);
-    await ctx.answerCbQuery(ok ? 'Удалено' : 'Уже удалено');
     await ctx.editMessageText('🗑 Запись веса удалена.').catch(() => undefined);
   });
 

@@ -70,13 +70,11 @@ export function registerSettingsMorning(bot: Telegraf): void {
   });
 
   bot.action(/^s:mod:(weight|activity|water|food|sleep)$/, async (ctx) => {
+    await ctx.answerCbQuery();
     const userId = ctx.from.id;
     const id = ctx.match[1] as ModuleId;
     const def = MODULES.find((m) => m.id === id);
-    if (!def?.available) {
-      await ctx.answerCbQuery();
-      return;
-    }
+    if (!def?.available) return;
     const rows = await getModules(userId);
     const row = rows.find((r) => r.module === id);
     const goal = (await getProfile(userId))?.goal ?? 'regular';
@@ -84,7 +82,6 @@ export function registerSettingsMorning(bot: Telegraf): void {
     await upsertModules([
       { user_id: userId, module: id, enabled, settings: row?.settings ?? def.defaults[goal].settings },
     ]);
-    await ctx.answerCbQuery(enabled ? 'Включено' : 'Выключено');
     await showModules(ctx, userId);
   });
 

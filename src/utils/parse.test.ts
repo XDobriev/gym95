@@ -6,6 +6,8 @@ test('parseCardioLine: минуты и км', () => {
   assert.deepEqual(parseCardioLine('48 4'), { ok: true, minutes: 48, distanceKm: 4 });
   assert.deepEqual(parseCardioLine('50 4,2'), { ok: true, minutes: 50, distanceKm: 4.2 });
   assert.deepEqual(parseCardioLine('45'), { ok: true, minutes: 45, distanceKm: null });
+  assert.deepEqual(parseCardioLine('30 10кр'), { ok: true, minutes: 30, distanceKm: 4 });
+  assert.deepEqual(parseCardioLine('25 5к'), { ok: true, minutes: 25, distanceKm: 2 });
 });
 
 test('parseCardioLine: ошибки', () => {

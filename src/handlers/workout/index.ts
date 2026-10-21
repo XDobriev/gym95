@@ -35,6 +35,7 @@ import {
   handleCardioDurationEntered,
   handleCardioDurationDefault,
   handleCardioDistanceEntered,
+  handleCardioLapsChosen,
   handleCardioDistanceSkip,
   handleCardioInclineEntered,
   handleCardioInclineSkip,
@@ -379,6 +380,25 @@ export function registerWorkout(bot: Telegraf): void {
   bot.action('w:cardio_skip_distance', async (ctx) => {
     await ctx.answerCbQuery();
     await handleCardioDistanceSkip(ctx);
+  });
+
+  bot.action(/^w:cardio_laps:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCardioLapsChosen(ctx, Number(ctx.match[1]));
+  });
+
+  bot.action(/^w:rest:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const seconds = Number(ctx.match[1]);
+    const userId = ctx.from.id;
+    await ctx.reply(`⏱ Отдых ${seconds} сек пошёл! Приготовься к следующему подходу 💪`);
+    setTimeout(async () => {
+      try {
+        await ctx.telegram.sendMessage(userId, `🔔 Время отдыха (${seconds} сек) вышло! Пора делать подход 🔥`);
+      } catch {
+        // ignore if user blocked or chat closed
+      }
+    }, seconds * 1000).unref();
   });
 
   bot.action('w:cardio_skip_incline', async (ctx) => {

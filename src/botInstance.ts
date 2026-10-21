@@ -17,6 +17,7 @@ import { registerBody } from './handlers/body';
 import { registerFood } from './handlers/food';
 import { registerWater } from './handlers/water';
 import { registerMeasure } from './handlers/measure';
+import { registerVoice } from './handlers/voice';
 
 export const bot = new Telegraf(config.BOT_TOKEN);
 
@@ -41,6 +42,7 @@ registerMeasure(bot);
 registerBody(bot);
 // Самым последним: еда пишется свободным текстом («обед 650») и берёт всё, что осталось.
 registerFood(bot);
+registerVoice(bot);
 
 const FAILURE_TEXT = '⚠️ Не получилось выполнить действие — сервис может быть временно недоступен. Попробуй через пару минут.';
 

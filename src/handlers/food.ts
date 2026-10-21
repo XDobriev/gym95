@@ -6,7 +6,7 @@ import { isModuleEnabled } from '../modules/body';
 import { dayTotalLine, entryLabel, foodAverages, frequentDishes, FrequentDish, getKcalNorm } from '../modules/food';
 import { addDays, localNow } from '../utils/time';
 import { formatKcal, looksLikeFoodDescription, Meal, parseFoodLine, parseFoodPrefix } from '../utils/food';
-import { AiError, estimateFood, isAiConfigured } from '../ai/foodEstimate';
+import { AiError, estimateFood, estimateFoodFromImage, isAiConfigured } from '../ai/foodEstimate';
 import { getDraft } from './workout/state';
 
 const HINT = 'Еду записывай одной строкой: «обед 650», «перекус 2 яблока 190», «вчера ужин 700».';
@@ -77,6 +77,18 @@ async function sendFoodSummary(ctx: Context, userId: number): Promise<void> {
   if (avgs.avg7 !== null) lines.push(`В среднем за 7 дней: ${formatKcal(avgs.avg7)} ккал`);
   if (avgs.avg30 !== null) lines.push(`В среднем за 30 дней: ${formatKcal(avgs.avg30)} ккал`);
   if (norm) lines.push(`Норма (по профилю и весу): ${formatKcal(norm)} ккал`);
+  if (norm && avgs.avg7 !== null) {
+    const diff = norm - avgs.avg7;
+    if (diff > 50) {
+      const weekDeficit = Math.round(diff * 7);
+      const fatKg = (weekDeficit / 7700).toFixed(2);
+      lines.push(`🔥 Дефицит ~${formatKcal(diff)} ккал/день (≈ -${fatKg} кг чистого жира за неделю!)`);
+    } else if (diff < -50) {
+      lines.push(`⚠️ Профицит ~${formatKcal(-diff)} ккал/день (выше нормы)`);
+    } else {
+      lines.push(`⚖️ Баланс калорий держится ровно`);
+    }
+  }
   lines.push('', HINT);
 
   const rows: InlineKeyboardButton[][] = dishes.map((d, i) => [
@@ -130,9 +142,76 @@ export function registerFood(bot: Telegraf): void {
   });
 
   bot.action(/^fd:del:([0-9a-f-]{36})$/, async (ctx) => {
+    await ctx.answerCbQuery();
     const ok = await deleteFood(ctx.from.id, ctx.match[1]);
-    await ctx.answerCbQuery(ok ? 'Удалено' : 'Уже удалено');
     if (ok) await ctx.reply('🗑 Запись о еде удалена.');
+  });
+
+  bot.on('photo', async (ctx, next) => {
+    const userId = ctx.from.id;
+    if (getDraft(userId)) return next();
+    const foodOn = await isModuleEnabled(userId, 'food');
+    if (!foodOn) {
+      await ctx.reply('Модуль еды выключен. Включить: /settings → 🧩 Модули.');
+      return;
+    }
+    if (!isAiConfigured()) {
+      await ctx.reply('Для распознавания блюда по фото требуется ключ Gemini в настройках бота. Введи текстом: «обед 650».');
+      return;
+    }
+
+    const today = await todayOf(userId);
+    if (!takeAiQuota(userId, today)) {
+      await ctx.reply(`На сегодня лимит ИИ-оценок исчерпан (${AI_DAILY_LIMIT}). Напиши текстом с числом: «обед 650».`);
+      return;
+    }
+
+    const photos = ctx.message.photo;
+    const bestPhoto = photos[photos.length - 1];
+    const caption = ctx.message.caption?.trim();
+    const progress = await ctx.reply('🤖 Анализирую фото блюда…');
+
+    const edit = (t: string, extra?: { reply_markup: InlineKeyboardMarkup }) =>
+      ctx.telegram.editMessageText(progress.chat.id, progress.message_id, undefined, t, extra).catch(() => undefined);
+
+    try {
+      const fileLink = await ctx.telegram.getFileLink(bestPhoto.file_id);
+      const res = await fetch(fileLink.toString());
+      const arrayBuf = await res.arrayBuffer();
+      const base64 = Buffer.from(arrayBuf).toString('base64');
+
+      const est = await estimateFoodFromImage(base64, 'image/jpeg', caption);
+      if (!est.isFood) {
+        await edit('На фото не похоже на еду 🤔 Попробуй сфотографировать блюдо ближе или напиши текстом: «обед 650».');
+        return;
+      }
+
+      const description = est.name.length <= 60 ? est.name : (caption ?? est.name).slice(0, 60);
+      const dateStr = foodDate.get(userId) ?? today;
+      pendingEstimate.set(userId, { meal: null, description, kcal: est.kcal, dateStr });
+
+      const lines = [
+        `🤖 ${est.name}${est.portion ? ` (${est.portion})` : ''}`,
+        `≈ ${formatKcal(est.kcal)} ккал${est.proteinG !== null ? ` · белок ~${est.proteinG} г` : ''}`,
+        dateStr !== today ? `Запишу за ${ddmm(dateStr)}.` : '',
+        'Оценка по фото (погрешность 15–25%). Знаешь точнее — нажми «Своё число».',
+      ].filter(Boolean);
+
+      await edit(lines.join('\n'), {
+        reply_markup: Markup.inlineKeyboard([
+          [Markup.button.callback('✅ Записать', 'ai:ok'), Markup.button.callback('✏️ Своё число', 'ai:own')],
+          [Markup.button.callback('❌ Не то', 'ai:no')],
+        ]).reply_markup,
+      });
+    } catch (err) {
+      console.error('ИИ-оценка еды по фото:', err);
+      const quota = err instanceof AiError && err.kind === 'quota';
+      await edit(
+        quota
+          ? 'Лимит бесплатного ИИ на сегодня закончился. Напиши с числом: «обед 650».'
+          : 'Не удалось распознать фото. Напиши текстом: «обед 650».'
+      );
+    }
   });
 
   // Регистрируется самым последним: еда пишется обычным текстом, поэтому берём

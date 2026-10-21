@@ -40,7 +40,13 @@ export function parseCardioLine(text: string): CardioLineResult {
 
   if (tokens.length === 1) return { ok: true, minutes, distanceKm: null };
 
-  const km = Number(tokens[1].replace(',', '.'));
+  const lapMatch = /^(\d+(?:[.,]\d+)?)(?:кр|к|laps?)$/i.exec(tokens[1]);
+  let km: number;
+  if (lapMatch) {
+    km = Number(lapMatch[1].replace(',', '.')) * 0.4;
+  } else {
+    km = Number(tokens[1].replace(',', '.'));
+  }
   if (!Number.isFinite(km) || km <= 0 || km > 200) return { ok: false, error: CARDIO_EXAMPLE };
   return { ok: true, minutes, distanceKm: Math.round(km * 100) / 100 };
 }

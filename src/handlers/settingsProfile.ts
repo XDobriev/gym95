@@ -1,7 +1,7 @@
 import { Context, Markup, Telegraf } from 'telegraf';
 import { Goal, GOAL_LABELS, Profile, Sex, SEX_LABELS } from '../types/profile';
 import { addBodyWeight, getLatestWeight, getProfile, updateProfile } from '../db/profiles';
-import { getModules, patchModuleSettings } from '../db/modules';
+import { getModules, patchModuleSettings, upsertModules } from '../db/modules';
 import { isKnownTimezone, tzLabel } from '../utils/timezones';
 import { parseBodyLine } from '../utils/parse';
 import { formatLiters, waterNormMl } from '../utils/norms';
@@ -55,7 +55,23 @@ export function registerSettingsProfile(bot: Telegraf): void {
 
   bot.action(/^s:p:goal:(lose|gain|regular)$/, async (ctx) => {
     await ctx.answerCbQuery('Цель обновлена');
-    await updateProfile(ctx.from.id, { goal: ctx.match[1] as Goal });
+    const newGoal = ctx.match[1] as Goal;
+    await updateProfile(ctx.from.id, { goal: newGoal });
+    if (newGoal === 'lose') {
+      const rows = await getModules(ctx.from.id);
+      const updates = [];
+      const foodRow = rows.find((r) => r.module === 'food');
+      if (!foodRow?.enabled) {
+        updates.push({ user_id: ctx.from.id, module: 'food' as const, enabled: true, settings: foodRow?.settings ?? {} });
+      }
+      const sleepRow = rows.find((r) => r.module === 'sleep');
+      if (!sleepRow?.enabled) {
+        updates.push({ user_id: ctx.from.id, module: 'sleep' as const, enabled: true, settings: sleepRow?.settings ?? {} });
+      }
+      if (updates.length > 0) {
+        await upsertModules(updates);
+      }
+    }
     await showProfile(ctx, ctx.from.id, true);
   });
 

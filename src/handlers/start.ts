@@ -25,7 +25,10 @@ const HELP_TEXT = `Команды:
 // middleware доступа (src/handlers/access.ts) и знакомство.
 export function registerStart(bot: Telegraf): void {
   bot.command('start', async (ctx) => {
-    await ctx.reply(HELP_TEXT);
     await sendToday(ctx, ctx.from.id);
+  });
+
+  bot.command('help', async (ctx) => {
+    await ctx.reply(HELP_TEXT);
   });
 }

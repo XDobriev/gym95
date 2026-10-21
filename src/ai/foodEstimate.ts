@@ -100,3 +100,71 @@ export async function estimateFood(description: string): Promise<Estimate> {
   }
   throw new AiError(`Ни одна модель Gemini не подошла (последний ответ ${lastStatus})`, 'unavailable');
 }
+
+async function callModelWithImage(
+  model: string,
+  base64: string,
+  mimeType: string,
+  caption?: string
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    return await fetch(`${API_BASE}/${model}:generateContent`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY ?? '' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType, data: base64 } },
+              {
+                text: caption
+                  ? `Оцени блюдо на фото с учётом пояснения: ${caption}`
+                  : 'Оцени калорийность и состав блюда на фото.',
+              },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+      }),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function estimateFoodFromImage(
+  base64: string,
+  mimeType = 'image/jpeg',
+  caption?: string
+): Promise<Estimate> {
+  let lastStatus = 0;
+  for (const model of models()) {
+    let res: Response;
+    try {
+      res = await callModelWithImage(model, base64, mimeType, caption);
+    } catch (err) {
+      throw new AiError(`Gemini недоступен: ${err instanceof Error ? err.message : err}`, 'unavailable');
+    }
+    lastStatus = res.status;
+    if (res.status === 400 || res.status === 403) {
+      const body = await res.text().catch(() => '');
+      if (/api[ _]?key/i.test(body)) throw new AiError('Ключ Gemini недействителен или без доступа', 'unavailable');
+      continue;
+    }
+    if (res.status === 404) continue;
+    if (res.status === 429) throw new AiError('Лимит бесплатного тарифа Gemini исчерпан', 'quota');
+    if (!res.ok) throw new AiError(`Gemini ответил ${res.status}`, 'unavailable');
+
+    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+    const parsed = parseEstimate(text);
+    if (!parsed) throw new AiError('Непонятный ответ модели', 'unavailable');
+    return parsed;
+  }
+  throw new AiError(`Ни одна модель Gemini не подошла (последний ответ ${lastStatus})`, 'unavailable');
+}

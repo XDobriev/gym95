@@ -5,10 +5,14 @@ import { getWorkoutsBetween } from '../db/workouts';
 import { getExercisesForWorkouts } from '../db/exercises';
 import { getCardioSessionsForWorkouts } from '../db/cardio';
 import { listTemplates } from '../db/templates';
-import { getUserTimezone } from '../db/profiles';
+import { getWeightsSince, getUserTimezone } from '../db/profiles';
+import { getSleepSince } from '../db/sleep';
+import { addWater, undoLastWater } from '../db/water';
+import { getWaterStatus } from '../modules/water';
 import { getChainInfo } from '../modules/activity';
 import { addDays, localMidnightUtc, localNow } from '../utils/time';
 import { formatCardioInline, formatSetsInline, formatWorkoutTypeWithEmoji } from '../utils/format';
+import { formatLitersShort } from '../utils/water';
 import { clearBodyInput, setBodyInput } from './body/state';
 import { buildToday, todayKeyboard } from './today';
 import { handleNewWorkoutForDate } from './workout';
@@ -41,7 +45,8 @@ async function yesterdayReview(
   tz: string,
   yesterday: string,
   today: string,
-  withFood: boolean
+  withFood: boolean,
+  withWater: boolean
 ): Promise<string> {
   const workouts = await getWorkoutsBetween(
     userId,
@@ -80,6 +85,22 @@ async function yesterdayReview(
     }
   }
 
+  if (withWater) {
+    try {
+      const water = await getWaterStatus(userId, tz, yesterday);
+      const done = water.drunkMl >= water.targetMl;
+      const drunkStr = formatLitersShort(water.drunkMl);
+      const targetStr = formatLitersShort(water.targetMl);
+      if (water.drunkMl === 0) {
+        lines.push(`💧 Вода вчера: не записана (норма ${targetStr} л)`);
+      } else {
+        lines.push(`💧 Вода вчера: ${drunkStr} / ${targetStr} л ${done ? '✓ (норма выполнена)' : '⚠️ (не допил)'}`);
+      }
+    } catch (e) {
+      console.error('water yesterday in morning review:', e);
+    }
+  }
+
   if (withFood) lines.push(await foodYesterdayLine(userId, yesterday));
 
   const chain = await getChainInfo(userId).catch(() => null);
@@ -89,13 +110,27 @@ async function yesterdayReview(
   return lines.join('\n');
 }
 
-function reviewKeyboard(withFood: boolean) {
+function reviewKeyboard(withFood: boolean, withWater: boolean) {
   const rows = [
     [Markup.button.callback('✅ Всё верно', 'm:ok')],
     [Markup.button.callback('➕ Тренировка за вчера', 'm:addw')],
   ];
-  if (withFood) rows.push([Markup.button.callback('🍽 Еда за вчера', 'm:food')]);
+  const extras: ReturnType<typeof Markup.button.callback>[] = [];
+  if (withWater) extras.push(Markup.button.callback('💧 Вода за вчера', 'm:water'));
+  if (withFood) extras.push(Markup.button.callback('🍽 Еда за вчера', 'm:food'));
+  if (extras.length > 0) rows.push(extras);
   return Markup.inlineKeyboard(rows).reply_markup;
+}
+
+function morningWaterKeyboard() {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('+250 мл', 'm:w:add:250'),
+      Markup.button.callback('+500 мл', 'm:w:add:500'),
+      Markup.button.callback('+1000 мл', 'm:w:add:1000'),
+    ],
+    [Markup.button.callback('↩️ Отменить', 'm:w:undo'), Markup.button.callback('⬅️ К обзору', 'm:w:back')],
+  ]).reply_markup;
 }
 
 const skipKeyboard = () => Markup.inlineKeyboard([[Markup.button.callback('Пропустить', 'm:skip')]]).reply_markup;
@@ -111,9 +146,15 @@ export async function startMorning(send: Send, userId: number): Promise<void> {
   const weightRow = modules.find((m) => m.module === 'weight');
   const weightToday = on('weight') && (weightRow?.settings.frequency !== 'weekly' || weekday === 0);
 
+  const [existingSleep, existingWeight] = await Promise.all([
+    getSleepSince(userId, today),
+    getWeightsSince(userId, localMidnightUtc(today, tz).toISOString()),
+  ]);
+
   const steps: MorningStep[] = [];
-  if (on('sleep')) steps.push('sleep');
-  if (weightToday) steps.push('weight');
+  if (on('sleep') && existingSleep.length === 0) steps.push('sleep');
+  if (weightToday && existingWeight.length === 0) steps.push('weight');
+
   // Замеры лентой — часть модуля веса: раз в 30 дней после прошлых.
   if (on('weight')) {
     const last = await getLastMeasurements(userId);
@@ -123,7 +164,10 @@ export async function startMorning(send: Send, userId: number): Promise<void> {
   clearBodyInput(userId);
   sessions.set(userId, { today, yesterday, steps });
   const withFood = on('food');
-  await send(await yesterdayReview(userId, tz, yesterday, today, withFood), { reply_markup: reviewKeyboard(withFood) });
+  const withWater = on('water');
+  await send(await yesterdayReview(userId, tz, yesterday, today, withFood, withWater), {
+    reply_markup: reviewKeyboard(withFood, withWater),
+  });
 }
 
 // Следующий шаг обзора. Вызывается после «Всё верно», «Пропустить» и после ввода значения.
@@ -186,6 +230,60 @@ export function registerMorning(bot: Telegraf): void {
     clearBodyInput(ctx.from.id);
     await dropKeyboard(ctx);
     await continueMorning(ctxSend(ctx), ctx.from.id);
+  });
+
+  bot.action('m:water', async (ctx) => {
+    await ctx.answerCbQuery();
+    const session = sessions.get(ctx.from.id);
+    const tz = await getUserTimezone(ctx.from.id);
+    const yesterday = session?.yesterday ?? addDays(localNow(tz).dateStr, -1);
+    const water = await getWaterStatus(ctx.from.id, tz, yesterday);
+    await ctx.editMessageText(
+      `💧 Запись воды за вчера (${longDate(yesterday)}):\nСейчас: ${formatLitersShort(water.drunkMl)} из ${formatLitersShort(water.targetMl)} л\n\nСколько добавить?`,
+      { reply_markup: morningWaterKeyboard() }
+    ).catch(() => undefined);
+  });
+
+  bot.action(/^m:w:add:(250|500|1000)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from.id;
+    const ml = Number(ctx.match[1]);
+    const session = sessions.get(userId);
+    const tz = await getUserTimezone(userId);
+    const yesterday = session?.yesterday ?? addDays(localNow(tz).dateStr, -1);
+    await addWater(userId, yesterday, ml);
+    const water = await getWaterStatus(userId, tz, yesterday);
+    await ctx.editMessageText(
+      `💧 Добавлено +${ml} мл за вчера!\nСейчас: ${formatLitersShort(water.drunkMl)} из ${formatLitersShort(water.targetMl)} л`,
+      { reply_markup: morningWaterKeyboard() }
+    ).catch(() => undefined);
+  });
+
+  bot.action('m:w:undo', async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from.id;
+    const session = sessions.get(userId);
+    const tz = await getUserTimezone(userId);
+    const yesterday = session?.yesterday ?? addDays(localNow(tz).dateStr, -1);
+    const ok = await undoLastWater(userId, yesterday);
+    const water = await getWaterStatus(userId, tz, yesterday);
+    await ctx.editMessageText(
+      ok ? `↩️ Последняя запись воды за вчера отменена.\nСейчас: ${formatLitersShort(water.drunkMl)} из ${formatLitersShort(water.targetMl)} л` : 'Нечего отменять за вчера.',
+      { reply_markup: morningWaterKeyboard() }
+    ).catch(() => undefined);
+  });
+
+  bot.action('m:w:back', async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from.id;
+    const session = sessions.get(userId);
+    const tz = await getUserTimezone(userId);
+    const { dateStr: today } = localNow(tz);
+    const yesterday = session?.yesterday ?? addDays(today, -1);
+    const modules = await getModules(userId);
+    const on = (id: string) => modules.some((m) => m.module === id && m.enabled);
+    const text = await yesterdayReview(userId, tz, yesterday, today, on('food'), on('water'));
+    await ctx.editMessageText(text, { reply_markup: reviewKeyboard(on('food'), on('water')) }).catch(() => undefined);
   });
 
   bot.action('m:food', async (ctx) => {
