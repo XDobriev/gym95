@@ -55,8 +55,11 @@ export async function handleSetsTextEntered(ctx: Context, text: string): Promise
   upsertCurrentExercise(draft, draft.currentExerciseName, result.sets);
   setStep(userId, 'exercise_saved_menu');
 
+  const lastEx = draft.exercises[draft.exercises.length - 1];
+  const maxWeight = lastEx ? Math.max(...lastEx.sets.map((s) => s.weight)) : undefined;
+
   await ctx.reply(renderExerciseSavedMenu(draft), {
-    reply_markup: exerciseSavedMenuKeyboard(canAddCardio(draft)),
+    reply_markup: exerciseSavedMenuKeyboard(canAddCardio(draft), maxWeight),
   });
 }
 
@@ -95,8 +98,10 @@ export async function handleRepeatLast(ctx: Context): Promise<void> {
 
   lastExercise.sets.push({ ...lastSet });
 
+  const maxWeight = Math.max(...lastExercise.sets.map((s) => s.weight));
+
   await ctx.editMessageText(renderExerciseSavedMenu(draft), {
-    reply_markup: exerciseSavedMenuKeyboard(canAddCardio(draft)),
+    reply_markup: exerciseSavedMenuKeyboard(canAddCardio(draft), maxWeight),
   });
 }
 

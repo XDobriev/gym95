@@ -40,6 +40,12 @@ test('перерыв больше допустимого рвёт цепочку
   assert.deepEqual(computeChain(everyOtherDay, '2026-10-23', 2), { current: 0, best: 6, deadline: null });
 });
 
+test('заморозка стрика (frozenDates) защищает цепочку от разрыва', () => {
+  // 2026-10-21 был заморожен как день отдыха/болезни
+  const status = computeChain(everyOtherDay, '2026-10-23', 2, ['2026-10-21']);
+  assert.equal(status.current, 7);
+});
+
 test('в последний допустимый день цепочка ещё жива', () => {
   assert.equal(computeChain(everyOtherDay, '2026-10-22', 2).current, 6);
 });

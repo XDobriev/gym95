@@ -104,7 +104,7 @@ export function enteringSetsKeyboard(): InlineKeyboardMarkup {
   ]).reply_markup;
 }
 
-export function exerciseSavedMenuKeyboard(showAddCardio = false): InlineKeyboardMarkup {
+export function exerciseSavedMenuKeyboard(showAddCardio = false, lastWeight?: number): InlineKeyboardMarkup {
   const rows = [
     [
       Markup.button.callback('⏱ Отдых 60с', 'w:rest:60'),
@@ -113,8 +113,11 @@ export function exerciseSavedMenuKeyboard(showAddCardio = false): InlineKeyboard
     ],
     [Markup.button.callback('➕ Ещё подход', 'w:add_more_sets')],
     [Markup.button.callback('🔁 Повторить последний подход', 'w:repeat_last')],
-    [Markup.button.callback('➡️ Следующее упражнение', 'w:next_exercise')],
   ];
+  if (lastWeight && lastWeight >= 20) {
+    rows.push([Markup.button.callback(`🧮 Блины на ${lastWeight} кг`, `calc:wt:${lastWeight}`)]);
+  }
+  rows.push([Markup.button.callback('➡️ Следующее упражнение', 'w:next_exercise')]);
   if (showAddCardio) {
     rows.push([Markup.button.callback('🏃 Добавить кардио', 'w:add_cardio')]);
   }

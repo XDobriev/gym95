@@ -8,8 +8,14 @@ export interface ChainStatus {
 
 // Цепочка — подряд идущие дни тренировок, между которыми не больше maxGapDays дней
 // отдыха. Несколько тренировок в один день — один день цепочки.
-export function computeChain(dates: string[], today: string, maxGapDays: number): ChainStatus {
-  const days = [...new Set(dates)].filter((d) => d <= today).sort();
+// Замороженные дни (frozenDates) выступают «мостом» и защищают стрик от разрыва.
+export function computeChain(
+  dates: string[],
+  today: string,
+  maxGapDays: number,
+  frozenDates: string[] = []
+): ChainStatus {
+  const days = [...new Set([...dates, ...frozenDates])].filter((d) => d <= today).sort();
   if (days.length === 0) return { current: 0, best: 0, deadline: null };
 
   const maxStep = maxGapDays + 1;

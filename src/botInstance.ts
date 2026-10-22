@@ -18,6 +18,11 @@ import { registerFood } from './handlers/food';
 import { registerWater } from './handlers/water';
 import { registerMeasure } from './handlers/measure';
 import { registerVoice } from './handlers/voice';
+import { registerPlates } from './handlers/plates';
+import { registerDiet } from './handlers/diet';
+import { registerAchievements } from './handlers/achievements';
+import { registerFreeze } from './handlers/freeze';
+import { registerPrograms } from './handlers/programs';
 
 export const bot = new Telegraf(config.BOT_TOKEN);
 
@@ -27,6 +32,11 @@ registerAccess(bot);
 registerOnboarding(bot);
 registerStart(bot);
 registerToday(bot);
+registerPlates(bot);
+registerDiet(bot);
+registerAchievements(bot);
+registerFreeze(bot);
+registerPrograms(bot);
 registerWorkout(bot);
 registerWorkoutEdit(bot);
 registerTemplateManagement(bot);
