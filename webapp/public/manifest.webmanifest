@@ -1,0 +1,15 @@
+{
+  "name": "gym95 · Дневник тренировок",
+  "short_name": "gym95",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17212b",
+  "theme_color": "#c9ff2e",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

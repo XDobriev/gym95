@@ -16,7 +16,17 @@ import { Loading, ErrorState, EmptyState } from '../components/States';
 import { formatDateDDMM, formatVolume } from '../format';
 import { haptic } from '../telegram';
 
-type ProgressTab = 'exercise' | 'volume';
+type ProgressTab = 'exercise' | 'volume' | 'stadium';
+
+interface StadiumSession {
+  id: string;
+  date: string;
+  activity: string;
+  distanceKm: number;
+  durationMinutes: number;
+  laps: number;
+  avgPace: string | null;
+}
 
 export function ProgressScreen() {
   const [names, setNames] = useState<string[] | null>(null);
@@ -29,6 +39,10 @@ export function ProgressScreen() {
   const [volumeWeeks, setVolumeWeeks] = useState<VolumeHistoryPoint[] | null>(null);
   const [volumeStatus, setVolumeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [volumeError, setVolumeError] = useState('');
+
+  const [stadiumSessions, setStadiumSessions] = useState<StadiumSession[] | null>(null);
+  const [stadiumStatus, setStadiumStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [stadiumError, setStadiumError] = useState('');
 
   const loadExercises = useCallback(async () => {
     setStatus('loading');
@@ -84,6 +98,39 @@ export function ProgressScreen() {
     })();
   }, [tab, volumeStatus]);
 
+  useEffect(() => {
+    if (tab !== 'stadium' || stadiumStatus !== 'idle') return;
+    setStadiumStatus('loading');
+    (async () => {
+      try {
+        const res = await api.history(0, 100);
+        const sessions: StadiumSession[] = [];
+        for (const w of res.workouts) {
+          for (const c of w.cardio ?? []) {
+            if (c.activity === 'walking' || c.activity === 'running') {
+              const distanceKm = c.distance_km ?? 0;
+              const laps = Math.round((distanceKm / 0.4) * 10) / 10;
+              sessions.push({
+                id: `${w.id}_${c.activity}`,
+                date: w.date,
+                activity: c.activity === 'walking' ? 'Ходьба / Стадион' : 'Бег',
+                distanceKm,
+                durationMinutes: w.duration_minutes ?? 0,
+                laps,
+                avgPace: c.avg_pace ?? null,
+              });
+            }
+          }
+        }
+        setStadiumSessions(sessions);
+        setStadiumStatus('ready');
+      } catch (err) {
+        setStadiumError(err instanceof Error ? err.message : 'Не удалось загрузить данные стадиона');
+        setStadiumStatus('error');
+      }
+    })();
+  }, [tab, stadiumStatus]);
+
   const maxOverall = useMemo(
     () => (points && points.length ? Math.max(...points.map((p) => p.maxWeight)) : 0),
     [points]
@@ -122,6 +169,50 @@ export function ProgressScreen() {
     setTab(next);
   };
 
+  const stadiumStats = useMemo(() => {
+    if (!stadiumSessions || stadiumSessions.length === 0) return null;
+    const totalLaps = Math.round(stadiumSessions.reduce((acc, s) => acc + s.laps, 0) * 10) / 10;
+    const totalKm = Math.round(stadiumSessions.reduce((acc, s) => acc + s.distanceKm, 0) * 10) / 10;
+    const totalMinutes = stadiumSessions.reduce((acc, s) => acc + s.durationMinutes, 0);
+
+    const badges = [
+      {
+        id: 'stadium_10',
+        emoji: '🥉',
+        title: 'Первые круги',
+        target: 10,
+        current: Math.min(10, Math.floor(totalLaps)),
+        unlocked: totalLaps >= 10,
+      },
+      {
+        id: 'stadium_50',
+        emoji: '🥈',
+        title: 'Стадионный бегун',
+        target: 50,
+        current: Math.min(50, Math.floor(totalLaps)),
+        unlocked: totalLaps >= 50,
+      },
+      {
+        id: 'stadium_100',
+        emoji: '🥇',
+        title: 'Хозяин стадиона',
+        target: 100,
+        current: Math.min(100, Math.floor(totalLaps)),
+        unlocked: totalLaps >= 100,
+      },
+    ];
+
+    const chartPoints = [...stadiumSessions]
+      .reverse()
+      .map((s) => ({
+        label: formatDateDDMM(s.date),
+        km: s.distanceKm,
+        laps: s.laps,
+      }));
+
+    return { totalLaps, totalKm, totalMinutes, badges, chartPoints };
+  }, [stadiumSessions]);
+
   if (status === 'loading') return <Loading />;
   if (status === 'error') {
     return <ErrorState title="Ошибка" message={errorMsg} onRetry={loadExercises} />;
@@ -148,7 +239,7 @@ export function ProgressScreen() {
           className={`progress-tab${tab === 'exercise' ? ' active' : ''}`}
           onClick={() => switchTab('exercise')}
         >
-          По упражнению / кардио
+          Упражнения
         </button>
         <button
           role="tab"
@@ -156,11 +247,19 @@ export function ProgressScreen() {
           className={`progress-tab${tab === 'volume' ? ' active' : ''}`}
           onClick={() => switchTab('volume')}
         >
-          Общий тоннаж
+          Тоннаж
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'stadium'}
+          className={`progress-tab${tab === 'stadium' ? ' active' : ''}`}
+          onClick={() => switchTab('stadium')}
+        >
+          🏟 Стадион
         </button>
       </div>
 
-      {tab === 'exercise' ? (
+      {tab === 'exercise' && (
         <>
           <div className="select-wrap">
             <label htmlFor="exercise-select">Упражнение или кардио</label>
@@ -257,43 +356,153 @@ export function ProgressScreen() {
             </>
           )}
         </>
-      ) : volumeStatus === 'loading' || volumeStatus === 'idle' ? (
-        <Loading />
-      ) : volumeStatus === 'error' ? (
-        <ErrorState title="Ошибка" message={volumeError} onRetry={() => setVolumeStatus('idle')} />
-      ) : (
-        <div className="chart-card">
-          <div className="chart-title">Тоннаж по неделям</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={volumeData} margin={{ top: 8, right: 16, bottom: 0, left: -18 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.18)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: 'var(--tg-hint)' }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: 'var(--tg-hint)' }}
-                tickLine={false}
-                axisLine={false}
-                width={44}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: 'var(--tg-bg)',
-                  border: '1px solid rgba(128,128,128,0.25)',
-                  borderRadius: 10,
-                  fontSize: 13,
-                  color: 'var(--tg-text)',
-                }}
-                labelStyle={{ color: 'var(--tg-hint)' }}
-                formatter={(v: number) => [formatVolume(v), 'тоннаж']}
-              />
-              <Bar dataKey="volumeKg" fill="var(--lime-ink)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      )}
+
+      {tab === 'volume' && (
+        volumeStatus === 'loading' || volumeStatus === 'idle' ? (
+          <Loading />
+        ) : volumeStatus === 'error' ? (
+          <ErrorState title="Ошибка" message={volumeError} onRetry={() => setVolumeStatus('idle')} />
+        ) : (
+          <div className="chart-card">
+            <div className="chart-title">Тоннаж по неделям</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={volumeData} margin={{ top: 8, right: 16, bottom: 0, left: -18 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.18)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: 'var(--tg-hint)' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--tg-hint)' }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--tg-bg)',
+                    border: '1px solid rgba(128,128,128,0.25)',
+                    borderRadius: 10,
+                    fontSize: 13,
+                    color: 'var(--tg-text)',
+                  }}
+                  labelStyle={{ color: 'var(--tg-hint)' }}
+                  formatter={(v: number) => [formatVolume(v), 'тоннаж']}
+                />
+                <Bar dataKey="volumeKg" fill="var(--lime-ink)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )
+      )}
+
+      {tab === 'stadium' && (
+        stadiumStatus === 'loading' || stadiumStatus === 'idle' ? (
+          <Loading />
+        ) : stadiumStatus === 'error' ? (
+          <ErrorState title="Ошибка" message={stadiumError} onRetry={() => setStadiumStatus('idle')} />
+        ) : !stadiumStats || !stadiumSessions || stadiumSessions.length === 0 ? (
+          <EmptyState
+            emoji="🏟"
+            title="Пока нет записей стадиона"
+            message="Запиши ходьбу или бег на стадионе через бота или таймер — и здесь появятся круги и ачивки."
+          />
+        ) : (
+          <div>
+            <div className="stadium-stats-grid">
+              <div className="stadium-stat-card">
+                <div className="stat-label">Всего кругов</div>
+                <div className="stat-value">
+                  {stadiumStats.totalLaps} <span className="stat-unit">кр</span>
+                </div>
+                <div className="stat-sub">{stadiumStats.totalKm} км на дорожке</div>
+              </div>
+              <div className="stadium-stat-card">
+                <div className="stat-label">Тренировок</div>
+                <div className="stat-value">{stadiumSessions.length}</div>
+                <div className="stat-sub">{stadiumStats.totalMinutes} мин активности</div>
+              </div>
+            </div>
+
+            <div className="stadium-achievements-card">
+              <div className="stadium-achievements-title">🏆 Ачивки стадиона</div>
+              {stadiumStats.badges.map((b) => (
+                <div key={b.id} className="stadium-badge-row">
+                  <div className="stadium-badge-icon">{b.emoji}</div>
+                  <div className="stadium-badge-info">
+                    <div className="stadium-badge-name">
+                      <span>{b.title}</span>
+                      <span className="stadium-badge-progress-text">
+                        {b.unlocked ? '✓ Получено!' : `${b.current} / ${b.target} кр`}
+                      </span>
+                    </div>
+                    <div className="stadium-badge-bar-bg">
+                      <div
+                        className={`stadium-badge-bar-fill${b.unlocked ? ' unlocked' : ''}`}
+                        style={{ width: `${Math.min(100, (b.current / b.target) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-title">Динамика дистанции (км)</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={stadiumStats.chartPoints} margin={{ top: 8, right: 16, bottom: 0, left: -18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.18)" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: 'var(--tg-hint)' }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: 'var(--tg-hint)' }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={44}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--tg-bg)',
+                      border: '1px solid rgba(128,128,128,0.25)',
+                      borderRadius: 10,
+                      fontSize: 13,
+                      color: 'var(--tg-text)',
+                    }}
+                    labelStyle={{ color: 'var(--tg-hint)' }}
+                    formatter={(v: number) => [`${v} км (~${Math.round((v / 0.4) * 10) / 10} кр)`, 'дистанция']}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="km"
+                    stroke="var(--lime-ink)"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: 'var(--lime-ink)', strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: 'var(--lime-ink)' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="session-list">
+              {stadiumSessions.map((s) => (
+                <div key={s.id} className="session-row">
+                  <span className="session-date">{formatDateDDMM(s.date)}</span>
+                  <span className="session-max">
+                    {s.laps} кр ({s.distanceKm} км){s.durationMinutes > 0 ? ` · ${s.durationMinutes} мин` : ''}
+                    {s.avgPace ? ` (${s.avgPace})` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
       )}
     </div>
   );

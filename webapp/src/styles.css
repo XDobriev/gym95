@@ -344,12 +344,12 @@ body {
 }
 /* --- Переключатель вкладок на «Прогрессе» --- */
 .progress-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  gap: 6px;
   margin-bottom: 16px;
 }
 .progress-tab {
+  flex: 1;
   border: 1px solid color-mix(in srgb, var(--tg-hint) 20%, transparent);
   background: var(--tg-secondary-bg);
   padding: 9px 0;
@@ -1238,5 +1238,112 @@ select {
 .circular-timer-container.finished .timer-circle-fg {
   stroke: var(--lime);
   filter: drop-shadow(0 0 8px var(--lime));
+}
+
+/* --- Вкладка Стадион на экране Прогресса --- */
+.stadium-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.stadium-stat-card {
+  background: var(--tg-secondary-bg);
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 20%, transparent);
+  border-radius: var(--card-radius);
+  padding: 12px 14px;
+}
+.stadium-stat-card .stat-label {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tg-hint);
+  margin-bottom: 4px;
+}
+.stadium-stat-card .stat-value {
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--tg-text);
+  margin-bottom: 2px;
+}
+.stadium-stat-card .stat-unit {
+  font-size: 15px;
+  color: var(--lime-ink);
+}
+.stadium-stat-card .stat-sub {
+  font-size: 11px;
+  color: var(--tg-hint);
+}
+
+.stadium-achievements-card {
+  background: var(--tg-secondary-bg);
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 20%, transparent);
+  border-radius: var(--card-radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.stadium-achievements-title {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tg-text);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stadium-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--tg-hint) 12%, transparent);
+}
+.stadium-badge-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.stadium-badge-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+.stadium-badge-info {
+  flex: 1;
+}
+.stadium-badge-name {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tg-text);
+  display: flex;
+  justify-content: space-between;
+}
+.stadium-badge-progress-text {
+  font-size: 11px;
+  color: var(--tg-hint);
+  font-weight: 500;
+}
+.stadium-badge-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: color-mix(in srgb, var(--tg-hint) 20%, transparent);
+  border-radius: 999px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.stadium-badge-bar-fill {
+  height: 100%;
+  background: var(--lime-ink);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.stadium-badge-bar-fill.unlocked {
+  background: var(--teal);
+  box-shadow: 0 0 6px var(--teal);
 }
 

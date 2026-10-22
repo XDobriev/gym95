@@ -7,13 +7,14 @@ import { upsertSleep } from '../db/sleep';
 import { addFood } from '../db/food';
 import { createWorkout } from '../db/workouts';
 import { addExercise } from '../db/exercises';
-import { addCardioSession } from '../db/cardio';
+import { addCardioSession, getCardioHistory } from '../db/cardio';
 import { getWaterStatus, waterStatusText } from '../modules/water';
 import { localNow } from '../utils/time';
 import { estimateFood } from '../ai/foodEstimate';
 import { formatKcal, MEAL_LABELS } from '../utils/food';
 import { getDraft } from './workout/state';
 import { computeAvgPace } from '../utils/cardio';
+import { generateCardioSummary } from '../utils/cardioSummary';
 import { handleSetsTextEntered } from './workout/setsInputStep';
 import { handleCustomExerciseNameEntered } from './workout/exerciseNameStep';
 import { handleWarmupMinutesEntered } from './workout/typeStep';
@@ -155,6 +156,22 @@ export function registerVoice(bot: Telegraf): void {
             inclinePercent: null,
           });
 
+          // Считаем предыдущие круги пользователя для расчета ачивок
+          const cardioHistory = await getCardioHistory(userId).catch(() => []);
+          const previousLaps = cardioHistory.reduce((sum, h) => {
+            if (h.activity === 'walking' || h.activity === 'running') {
+              return sum + (h.distanceKm ? Math.round((h.distanceKm / 0.4) * 10) / 10 : 0);
+            }
+            return sum;
+          }, 0);
+
+          const summary = generateCardioSummary({
+            activity: action.activity,
+            durationMinutes: duration ?? 0,
+            distanceKm: distance,
+            totalPreviousLaps: previousLaps,
+          });
+
           const actNames = {
             walking: 'Ходьба / Стадион',
             running: 'Бег',
@@ -163,14 +180,8 @@ export function registerVoice(bot: Telegraf): void {
             pool: 'Бассейн',
           };
 
-          const details: string[] = [];
-          if (action.laps) details.push(`${action.laps} кругов (~${distance} км)`);
-          else if (distance) details.push(`${distance} км`);
-          if (duration) details.push(`${duration} мин`);
-          if (avgPace) details.push(`темп ${avgPace}`);
-
           await edit(
-            `🎙 «${action.transcript}»\n\n🏃 Тренировка сохранена: ${actNames[action.activity]}!\n${details.join(' · ')}\n\nИстория — /history`
+            `🎙 «${action.transcript}»\n\n🏃 Тренировка сохранена: ${actNames[action.activity]}!\n\n${summary.lines.join('\n')}\n\nИстория — /history`
           );
           return;
         }

@@ -1,9 +1,10 @@
 import { getDraft, clearDraft } from './state';
 import { createWorkout } from '../../db/workouts';
 import { addExercise } from '../../db/exercises';
-import { addCardioSession } from '../../db/cardio';
+import { addCardioSession, getCardioHistory } from '../../db/cardio';
 import { computeAvgPace } from '../../utils/cardio';
 import { formatCardioInline, formatSetsInline } from '../../utils/format';
+import { generateCardioSummary } from '../../utils/cardioSummary';
 import { getUserTimezone } from '../../db/profiles';
 import { localNoonUtc } from '../../utils/time';
 import { chainAfterSaveText, getChainInfo } from '../../modules/activity';
@@ -71,15 +72,38 @@ export async function saveDraftWorkout(userId: number): Promise<FinishResult> {
   }
 
   if (draft.cardio && draft.cardio.activity && draft.cardio.durationMinutes !== undefined) {
-    sections.push(
+    const cardioHistory = await getCardioHistory(userId).catch(() => []);
+    const previousLaps = cardioHistory.reduce((sum, h) => {
+      if (h.activity === 'walking' || h.activity === 'running') {
+        return sum + (h.distanceKm ? Math.round((h.distanceKm / 0.4) * 10) / 10 : 0);
+      }
+      return sum;
+    }, 0);
+
+    const summary = generateCardioSummary({
+      activity: draft.cardio.activity,
+      durationMinutes: draft.cardio.durationMinutes,
+      distanceKm: draft.cardio.distanceKm ?? null,
+      totalPreviousLaps: previousLaps,
+    });
+
+    const lines = [
       formatCardioInline({
         activity: draft.cardio.activity,
         durationMinutes: draft.cardio.durationMinutes,
         distanceKm: draft.cardio.distanceKm ?? null,
         avgHeartRate: draft.cardio.avgHeartRate ?? null,
         inclinePercent: draft.cardio.inclinePercent ?? null,
-      })
-    );
+      }),
+    ];
+
+    if (summary.avgPace) lines.push(`⚡ Средний темп: ${summary.avgPace}`);
+    if (summary.burnedKcal > 0) lines.push(`🔥 Сожжено: ~${summary.burnedKcal} ккал`);
+    if (summary.nextBadge) {
+      lines.push(`🎖 До ачивки «${summary.nextBadge.title}»: ещё ${summary.nextBadge.lapsLeft} кр`);
+    }
+
+    sections.push(lines.join('\n'));
   }
 
   clearDraft(userId);
