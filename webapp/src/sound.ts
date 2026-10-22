@@ -53,3 +53,4 @@ export function playFinishedBeep(): void {
     playBeep(1350, 0.3, 'triangle');
   }, 140);
 }
+
