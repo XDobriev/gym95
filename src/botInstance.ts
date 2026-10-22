@@ -23,6 +23,7 @@ import { registerDiet } from './handlers/diet';
 import { registerAchievements } from './handlers/achievements';
 import { registerFreeze } from './handlers/freeze';
 import { registerPrograms } from './handlers/programs';
+import { registerMainMenu } from './handlers/mainMenu';
 
 export const bot = new Telegraf(config.BOT_TOKEN);
 
@@ -32,6 +33,7 @@ registerAccess(bot);
 registerOnboarding(bot);
 registerStart(bot);
 registerToday(bot);
+registerMainMenu(bot);
 registerPlates(bot);
 registerDiet(bot);
 registerAchievements(bot);

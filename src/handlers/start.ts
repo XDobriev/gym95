@@ -1,5 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { sendToday } from './today';
+import { mainMenuReplyKeyboard } from './mainMenu';
 
 const HELP_TEXT = `Команды:
 /today — сегодня: что сделано и что осталось
@@ -22,7 +23,6 @@ const HELP_TEXT = `Команды:
 /templates — шаблоны тренировок (фулбади, дом, стадион, свои)
 /history — последние тренировки
 /progress <упражнение> — история весов/повторений по упражнению
-/report — красивый персональный отчёт для врача/тренера
 /export — вся история в markdown (удобно вставить в чат с LLM)
 /settings — профиль, напоминания, цель недели
 /app — открыть дневник (Mini App)`;
@@ -31,10 +31,15 @@ const HELP_TEXT = `Команды:
 // middleware доступа (src/handlers/access.ts) и знакомство.
 export function registerStart(bot: Telegraf): void {
   bot.command('start', async (ctx) => {
+    await ctx.reply('👋 Главное меню быстрого доступа всегда под рукой внизу чата 👇', {
+      reply_markup: mainMenuReplyKeyboard().reply_markup,
+    });
     await sendToday(ctx, ctx.from.id);
   });
 
   bot.command('help', async (ctx) => {
-    await ctx.reply(HELP_TEXT);
+    await ctx.reply(HELP_TEXT, {
+      reply_markup: mainMenuReplyKeyboard().reply_markup,
+    });
   });
 }

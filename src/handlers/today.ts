@@ -1,8 +1,10 @@
 import { Context, Markup, Telegraf } from 'telegraf';
+import { InlineKeyboardButton } from 'telegraf/typings/core/types/typegram';
 import { getRecentWorkouts, countWorkoutsSince } from '../db/workouts';
 import { getSettings } from '../db/settings';
 import { getModules } from '../db/modules';
 import { getUserTimezone } from '../db/profiles';
+import { addWater } from '../db/water';
 import { availableModules } from '../modules/registry';
 import { localNow, localWeekStart, localMidnightUtc, daysBetween } from '../utils/time';
 import { pluralizeRu } from '../utils/format';
@@ -68,9 +70,21 @@ export async function buildToday(userId: number): Promise<string> {
 
 export function todayKeyboard() {
   const url = resolveWebAppUrl();
-  const row = [Markup.button.callback('🏋️ Записать тренировку', 't:new_workout')];
-  if (url) return Markup.inlineKeyboard([row, [Markup.button.webApp('📊 Дневник', url)]]).reply_markup;
-  return Markup.inlineKeyboard([row]).reply_markup;
+  const rows: InlineKeyboardButton[][] = [
+    [Markup.button.callback('🏋️ Записать тренировку', 't:new_workout')],
+    [
+      Markup.button.callback('💧 +250 мл', 't:wa:250'),
+      Markup.button.callback('💧 +500 мл', 't:wa:500'),
+    ],
+    [
+      Markup.button.callback('🥗 Записать еду', 't:food'),
+      Markup.button.callback('⚖️ Записать вес', 't:weight'),
+    ],
+  ];
+  if (url) {
+    rows.push([Markup.button.webApp('📖 Открыть дневник (Mini App)', url)]);
+  }
+  return Markup.inlineKeyboard(rows).reply_markup;
 }
 
 export async function sendToday(ctx: Context, userId: number): Promise<void> {
@@ -85,5 +99,26 @@ export function registerToday(bot: Telegraf): void {
   bot.action('t:new_workout', async (ctx) => {
     await ctx.answerCbQuery();
     await handleNewWorkoutCommand(ctx);
+  });
+
+  bot.action(/^t:wa:(250|500)$/, async (ctx) => {
+    const userId = ctx.from.id;
+    const ml = Number(ctx.match[1]);
+    const tz = await getUserTimezone(userId);
+    await addWater(userId, localNow(tz).dateStr, ml);
+    await ctx.answerCbQuery(`+${ml} мл воды! 💧`);
+    await ctx.editMessageText(await buildToday(userId), { reply_markup: todayKeyboard() }).catch(() => undefined);
+  });
+
+  bot.action('t:food', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply(
+      '🥗 Напиши, что ты съел — одной строкой:\nНапример: «обед гречка с курицей» или «перекус 2 яблока 190».\nБот автоматически посчитает калории и добавит в дневник.'
+    );
+  });
+
+  bot.action('t:weight', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply('⚖️ Введи свой утренний вес числом, например: `85.4`', { parse_mode: 'Markdown' });
   });
 }

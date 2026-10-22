@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf';
+import { Context, Telegraf } from 'telegraf';
 import { getAllWorkoutsForExport } from '../db/workouts';
 import { getExercisesForWorkouts } from '../db/exercises';
 import { getCardioHistory } from '../db/cardio';
@@ -8,22 +8,18 @@ import { localNow, addDays } from '../utils/time';
 import { evaluateBadges, formatBadgesShowcase, UserStatsForBadges } from '../modules/achievements';
 import { Exercise, Workout } from '../types/domain';
 
-export function registerAchievements(bot: Telegraf): void {
-  bot.command(['achievements', 'badges', 'awards'], async (ctx) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
+export async function showAchievements(ctx: Context, userId: number): Promise<void> {
+  try {
+    const tz = await getUserTimezone(userId);
+    const today = localNow(tz).dateStr;
+    const oneYearAgo = addDays(today, -365);
 
-    try {
-      const tz = await getUserTimezone(userId);
-      const today = localNow(tz).dateStr;
-      const oneYearAgo = addDays(today, -365);
-
-      const [workouts, cardioList, profile, weights] = await Promise.all([
-        getAllWorkoutsForExport(userId).catch(() => [] as Workout[]),
-        getCardioHistory(userId).catch(() => []),
-        getProfile(userId).catch(() => null),
-        getWeightsSince(userId, oneYearAgo).catch(() => []),
-      ]);
+    const [workouts, cardioList, profile, weights] = await Promise.all([
+      getAllWorkoutsForExport(userId).catch(() => [] as Workout[]),
+      getCardioHistory(userId).catch(() => []),
+      getProfile(userId).catch(() => null),
+      getWeightsSince(userId, oneYearAgo).catch(() => []),
+    ]);
 
       const workoutIds = workouts.map((w: Workout) => w.id);
       const exercises = await getExercisesForWorkouts(workoutIds).catch(() => [] as Exercise[]);
@@ -92,6 +88,13 @@ export function registerAchievements(bot: Telegraf): void {
       console.error('Ошибка получения достижений:', err);
       await ctx.reply('Не удалось загрузить витрину наград. Попробуй позже.');
     }
+}
+
+export function registerAchievements(bot: Telegraf): void {
+  bot.command(['achievements', 'badges', 'awards'], async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    await showAchievements(ctx, userId);
   });
 }
 

@@ -60,6 +60,11 @@ async function showWorkoutSettings(ctx: Context, userId: number, viaEdit: boolea
   else await ctx.reply(settingsText(settings, tz), opts);
 }
 
+export async function showSettingsMenu(ctx: Context): Promise<void> {
+  clearAwaitingSettingsInput(ctx.from!.id);
+  await ctx.reply(MENU_TEXT, { reply_markup: menuKeyboard() });
+}
+
 export function registerSettings(bot: Telegraf): void {
   registerSettingsProfile(bot);
   registerSettingsChain(bot);
@@ -67,8 +72,7 @@ export function registerSettings(bot: Telegraf): void {
   registerSettingsWater(bot);
 
   bot.command('settings', async (ctx) => {
-    clearAwaitingSettingsInput(ctx.from.id);
-    await ctx.reply(MENU_TEXT, { reply_markup: menuKeyboard() });
+    await showSettingsMenu(ctx);
   });
 
   bot.action('s:menu', async (ctx) => {

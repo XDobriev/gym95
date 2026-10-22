@@ -13,6 +13,17 @@ export function platesKeyboard(targetWeightKg: number, currentBarWeightKg: numbe
   ]).reply_markup;
 }
 
+export function platesPresetKeyboard() {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('60 кг', 'calc:wt:60'),
+      Markup.button.callback('80 кг', 'calc:wt:80'),
+      Markup.button.callback('100 кг', 'calc:wt:100'),
+      Markup.button.callback('120 кг', 'calc:wt:120'),
+    ],
+  ]).reply_markup;
+}
+
 export function registerPlates(bot: Telegraf): void {
   // Команды /calc и /plates для быстрого расчета штанги и разминки
   bot.command(['calc', 'plates'], async (ctx) => {

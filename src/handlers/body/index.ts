@@ -105,7 +105,7 @@ async function applyValue(send: Send, userId: number, input: BodyInput, text: st
   return true;
 }
 
-async function sendBodySummary(ctx: Context, userId: number): Promise<void> {
+export async function sendBodySummary(ctx: Context, userId: number): Promise<void> {
   const tz = await getUserTimezone(userId);
   const today = localNow(tz).dateStr;
   const [{ stats, days }, sleep] = await Promise.all([loadWeightStats(userId, tz), sleepAverage(userId, today)]);

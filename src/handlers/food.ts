@@ -60,7 +60,7 @@ export async function startFoodForDate(ctx: Context, userId: number, dateStr: st
   );
 }
 
-async function sendFoodSummary(ctx: Context, userId: number): Promise<void> {
+export async function sendFoodSummary(ctx: Context, userId: number): Promise<void> {
   const today = await todayOf(userId);
   const [entries, norm, avgs, dishes] = await Promise.all([
     getFoodBetween(userId, today, today),

@@ -15,9 +15,13 @@ export function waterKeyboard() {
   ]).reply_markup;
 }
 
-async function statusFor(userId: number): Promise<string> {
+export async function statusFor(userId: number): Promise<string> {
   const tz = await getUserTimezone(userId);
   return waterStatusText(await getWaterStatus(userId, tz, localNow(tz).dateStr));
+}
+
+export async function sendWaterStatus(ctx: Context, userId: number): Promise<void> {
+  await ctx.reply(await statusFor(userId), { reply_markup: waterKeyboard() });
 }
 
 async function refresh(ctx: Context, userId: number): Promise<void> {
@@ -26,7 +30,7 @@ async function refresh(ctx: Context, userId: number): Promise<void> {
 
 export function registerWater(bot: Telegraf): void {
   bot.command('water', async (ctx) => {
-    await ctx.reply(await statusFor(ctx.from.id), { reply_markup: waterKeyboard() });
+    await sendWaterStatus(ctx, ctx.from.id);
   });
 
   bot.action(/^wa:add:(250|500|750)$/, async (ctx) => {
