@@ -4,6 +4,7 @@ import { getCardioHistory, getLastCardioActivitiesByUser } from '../db/cardio';
 import { CardioActivity } from '../types/domain';
 import { formatDateShortRu, formatSetsInline } from '../utils/format';
 import { buildProgressChartUrl, buildCardioProgressChartUrl } from '../utils/chart';
+import { calculate1RM, calculateExerciseStats, formatExerciseStatsSummary } from '../utils/oneRepMax';
 
 const TELEGRAM_CAPTION_LIMIT = 1024;
 
@@ -77,15 +78,32 @@ async function sendProgress(ctx: Context, userId: number, exerciseName: string):
     return;
   }
 
-  const lines = history.map((entry) => `${formatDateShortRu(entry.date)}: ${formatSetsInline(entry.sets)}`);
-  const text = `📈 ${exerciseName}\n\n${lines.join('\n')}`;
+  const stats = calculateExerciseStats(history);
+  const badgeLines = formatExerciseStatsSummary(stats);
+
+  const shownHistory = history.slice(-12);
+  const lines = shownHistory.map((entry) => {
+    const setsText = formatSetsInline(entry.sets);
+    const day1RM = entry.sets.reduce((max, s) => Math.max(max, calculate1RM(s.weight, s.reps)), 0);
+    const day1RMSuffix = !stats.isBodyweight && day1RM > 0 ? ` [1RM ~${day1RM} кг]` : '';
+    return `${formatDateShortRu(entry.date)}: ${setsText}${day1RMSuffix}`;
+  });
+
+  if (history.length > 12) {
+    lines.unshift(`...раннее ещё ${history.length - 12} записей...`);
+  }
+
+  const header = `📈 ${exerciseName}`;
+  const badgesBlock = badgeLines.length > 0 ? badgeLines.join('\n') + '\n\n' : '';
+  const historyBlock = `📋 История:\n${lines.join('\n')}`;
+  const text = `${header}\n\n${badgesBlock}${historyBlock}`;
   const chartUrl = buildProgressChartUrl(exerciseName, history);
 
   if (text.length <= TELEGRAM_CAPTION_LIMIT) {
     await ctx.replyWithPhoto(chartUrl, { caption: text }).catch(() => ctx.reply(text));
   } else {
     await ctx.replyWithPhoto(chartUrl, { caption: `📈 ${exerciseName}` }).catch(() => undefined);
-    await ctx.reply(lines.join('\n'));
+    await ctx.reply(text);
   }
 }
 
