@@ -16,3 +16,4 @@ test('formatProgramDetails: форматирует текст программы
   assert.ok(text.includes('Расписание дней'));
   assert.ok(text.includes('Ходьба / Стадион'));
 });
+

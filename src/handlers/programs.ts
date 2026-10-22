@@ -50,3 +50,4 @@ export function registerPrograms(bot: Telegraf): void {
     );
   });
 }
+

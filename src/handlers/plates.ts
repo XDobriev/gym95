@@ -35,3 +35,4 @@ export function registerPlates(bot: Telegraf): void {
     await ctx.reply(summary, { parse_mode: 'Markdown' });
   });
 }
+

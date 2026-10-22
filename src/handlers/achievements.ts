@@ -94,3 +94,4 @@ export function registerAchievements(bot: Telegraf): void {
     }
   });
 }
+

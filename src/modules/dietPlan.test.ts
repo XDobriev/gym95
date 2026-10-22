@@ -31,3 +31,4 @@ test('formatGroceriesList: форматирует список продукто�
   assert.ok(list.includes('Яйца'));
   assert.ok(list.includes('Творог'));
 });
+

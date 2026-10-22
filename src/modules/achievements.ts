@@ -232,3 +232,4 @@ export function formatBadgesShowcase(badges: Badge[]): string {
 
   return lines.join('\n');
 }
+

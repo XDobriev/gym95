@@ -60,3 +60,4 @@ test('formatBadgesShowcase: форматирует текст', () => {
   assert.ok(text.includes('Полученные награды'));
   assert.ok(text.includes('В процессе выполнения'));
 });
+

@@ -156,3 +156,4 @@ export function formatProgramDetails(program: WorkoutProgram): string {
 
   return lines.join('\n');
 }
+

@@ -193,3 +193,4 @@ export function formatPlatesSummary(targetWeightKg: number, barWeightKg = 20): s
 
   return lines.join('\n');
 }
+

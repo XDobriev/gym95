@@ -47,3 +47,4 @@ test('formatPlatesSummary: генерирует читаемый текст', ()
   assert.ok(text.includes('40 кг'));
   assert.ok(text.includes('Схема разминки'));
 });
+

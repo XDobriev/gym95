@@ -62,3 +62,4 @@ export function registerFreeze(bot: Telegraf): void {
     );
   });
 }
+

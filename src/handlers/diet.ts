@@ -90,3 +90,4 @@ export function registerDiet(bot: Telegraf): void {
     });
   });
 }
+
