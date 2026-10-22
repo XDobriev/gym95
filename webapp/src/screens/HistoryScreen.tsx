@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { WorkoutDTO } from '../../shared/types';
 import { api, ApiError } from '../api';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { Loading, ErrorState, EmptyState } from '../components/States';
 import { Toast } from '../components/Toast';
 import { monthKey, monthLabel } from '../format';
-import { confirmDialog } from '../telegram';
+import { confirmDialog, haptic } from '../telegram';
 import { WorkoutEditScreen } from './WorkoutEditScreen';
 
 const PAGE_SIZE = 20;
+
+type HistoryFilter = 'all' | 'strength' | 'cardio' | 'pool';
 
 export function HistoryScreen({
   onWorkoutsChanged,
@@ -18,6 +20,7 @@ export function HistoryScreen({
   onEditingChange?: (editing: boolean) => void;
 }) {
   const [workouts, setWorkouts] = useState<WorkoutDTO[]>([]);
+  const [filter, setFilter] = useState<HistoryFilter>('all');
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [hasMore, setHasMore] = useState(false);
@@ -84,9 +87,6 @@ export function HistoryScreen({
     return () => observer.disconnect();
   }, [hasMore, status, workouts.length, loadPage]);
 
-  // После правки состав/дата тренировки могли измениться (в т.ч. порядок сортировки
-  // по дате) — проще перезагрузить уже подгруженный кусок истории, чем править
-  // элемент точечно и городить дублирующую логику парсинга подходов на фронте.
   const refreshLoadedPage = useCallback(async () => {
     const count = Math.max(workouts.length, PAGE_SIZE);
     const page = await api.history(0, count);
@@ -112,6 +112,14 @@ export function HistoryScreen({
     const confirmed = await confirmDialog('Есть несохранённые изменения тренировки. Уйти без сохранения?');
     if (confirmed) setEditingWorkout(null);
   };
+
+  const filteredWorkouts = useMemo(() => {
+    if (filter === 'all') return workouts;
+    if (filter === 'strength') return workouts.filter((w) => w.type === 'strength' || w.type === 'mixed');
+    if (filter === 'cardio') return workouts.filter((w) => w.type === 'cardio');
+    if (filter === 'pool') return workouts.filter((w) => w.type === 'pool');
+    return workouts;
+  }, [workouts, filter]);
 
   if (editingWorkout) {
     return (
@@ -141,19 +149,68 @@ export function HistoryScreen({
     let lastMonth = '';
     content = (
       <div>
-        {workouts.map((w) => {
-          const key = monthKey(w.date);
-          const showMonth = key !== lastMonth;
-          lastMonth = key;
-          return (
-            <div key={w.id}>
-              {showMonth && <div className="month-label">{monthLabel(w.date)}</div>}
-              <WorkoutCard workout={w} onEdit={setEditingWorkout} />
-            </div>
-          );
-        })}
-        {hasMore && <div ref={sentinelRef} className="sentinel" />}
-        {loadingMore && <div className="loading-more">Загружаю ещё…</div>}
+        <div className="history-filter-tabs">
+          <button
+            className={`history-filter-tab ${filter === 'all' ? 'active' : ''}`}
+            onClick={() => {
+              haptic('light');
+              setFilter('all');
+            }}
+          >
+            Все ({workouts.length})
+          </button>
+          <button
+            className={`history-filter-tab ${filter === 'strength' ? 'active' : ''}`}
+            onClick={() => {
+              haptic('light');
+              setFilter('strength');
+            }}
+          >
+            🏋️ Силовые
+          </button>
+          <button
+            className={`history-filter-tab ${filter === 'cardio' ? 'active' : ''}`}
+            onClick={() => {
+              haptic('light');
+              setFilter('cardio');
+            }}
+          >
+            🏃 Кардио
+          </button>
+          <button
+            className={`history-filter-tab ${filter === 'pool' ? 'active' : ''}`}
+            onClick={() => {
+              haptic('light');
+              setFilter('pool');
+            }}
+          >
+            🏊 Бассейн
+          </button>
+        </div>
+
+        {filteredWorkouts.length === 0 ? (
+          <EmptyState
+            emoji="🔍"
+            title="Нет таких тренировок"
+            message="В этой категории пока нет записей. Выбери другой фильтр выше."
+          />
+        ) : (
+          <div>
+            {filteredWorkouts.map((w) => {
+              const key = monthKey(w.date);
+              const showMonth = key !== lastMonth;
+              lastMonth = key;
+              return (
+                <div key={w.id}>
+                  {showMonth && <div className="month-label">{monthLabel(w.date)}</div>}
+                  <WorkoutCard workout={w} onEdit={setEditingWorkout} />
+                </div>
+              );
+            })}
+            {hasMore && filter === 'all' && <div ref={sentinelRef} className="sentinel" />}
+            {loadingMore && <div className="loading-more">Загружаю ещё…</div>}
+          </div>
+        )}
       </div>
     );
   }

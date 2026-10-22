@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { haptic, notifyHaptic } from '../telegram';
-import { playCountdownBeep, playFinishedBeep } from '../sound';
+import { playCountdownBeep, playFinishedBeep, unlockAudio } from '../sound';
 
 type TimerMode = 'rest' | 'laps' | 'hiit';
 
@@ -19,10 +19,13 @@ export function TimerScreen() {
   const [restDuration, setRestDuration] = useState<number>(60);
   const [restTimeLeft, setRestTimeLeft] = useState<number>(60);
   const [restRunning, setRestRunning] = useState<boolean>(false);
+  const [restFinished, setRestFinished] = useState<boolean>(false);
   const restTimerRef = useRef<number | null>(null);
 
   const startRestTimer = (seconds?: number) => {
-    const dur = seconds ?? restTimeLeft;
+    unlockAudio();
+    setRestFinished(false);
+    const dur = seconds ?? (restTimeLeft === 0 ? restDuration : restTimeLeft);
     if (dur <= 0) return;
     setRestTimeLeft(dur);
     setRestRunning(true);
@@ -36,12 +39,15 @@ export function TimerScreen() {
 
   const resetRestTimer = (seconds?: number) => {
     setRestRunning(false);
+    setRestFinished(false);
     const target = seconds ?? restDuration;
     setRestTimeLeft(target);
     haptic('light');
   };
 
   const addRestTime = (deltaSec: number) => {
+    unlockAudio();
+    setRestFinished(false);
     haptic('light');
     setRestTimeLeft((prev) => Math.max(0, prev + deltaSec));
   };
@@ -57,8 +63,10 @@ export function TimerScreen() {
         if (prev <= 1) {
           clearInterval(restTimerRef.current!);
           setRestRunning(false);
+          setRestFinished(true);
           playFinishedBeep();
           notifyHaptic('success');
+          setTimeout(() => haptic('heavy'), 300);
           return 0;
         }
         if (prev <= 4) {
@@ -83,6 +91,7 @@ export function TimerScreen() {
   const lastLapTotalMsRef = useRef<number>(0);
 
   const startStopwatch = () => {
+    unlockAudio();
     haptic('medium');
     stopwatchStartTimeRef.current = Date.now() - lapElapsedMs;
     setLapStopwatchRunning(true);
@@ -173,6 +182,7 @@ export function TimerScreen() {
   const intervalTimerRef = useRef<number | null>(null);
 
   const startHiit = () => {
+    unlockAudio();
     haptic('medium');
     if (intervalPhase === 'finished') {
       setCurrentRound(1);
@@ -297,6 +307,7 @@ export function TimerScreen() {
                 key={sec}
                 className={`preset-btn ${restDuration === sec && !restRunning ? 'selected' : ''}`}
                 onClick={() => {
+                  unlockAudio();
                   setRestDuration(sec);
                   resetRestTimer(sec);
                 }}
@@ -306,7 +317,13 @@ export function TimerScreen() {
             ))}
           </div>
 
-          <div className="circular-timer-container">
+          {restFinished && (
+            <div className="timer-finished-banner">
+              🔔 Отдых завершён! Время следующего подхода!
+            </div>
+          )}
+
+          <div className={`circular-timer-container ${restFinished ? 'finished' : ''}`}>
             <svg className="timer-svg" viewBox="0 0 200 200">
               <circle className="timer-circle-bg" cx="100" cy="100" r="85" />
               <circle

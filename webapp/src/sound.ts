@@ -22,6 +22,14 @@ function getAudioContext(): AudioContext | null {
   }
 }
 
+/** Разблокирует AudioContext при пользовательском жесте (тапе/клике) */
+export function unlockAudio(): void {
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => undefined);
+  }
+}
+
 export function playBeep(freq = 880, duration = 0.15, type: OscillatorType = 'sine'): void {
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -53,4 +61,3 @@ export function playFinishedBeep(): void {
     playBeep(1350, 0.3, 'triangle');
   }, 140);
 }
-

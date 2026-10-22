@@ -1170,3 +1170,73 @@ select {
   padding: 10px 0;
 }
 
+/* --- Фильтры истории тренировок --- */
+.history-filter-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 14px;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.history-filter-tabs::-webkit-scrollbar {
+  display: none;
+}
+.history-filter-tab {
+  flex: 1;
+  min-width: max-content;
+  border: 1px solid color-mix(in srgb, var(--tg-hint) 20%, transparent);
+  background: var(--tg-secondary-bg);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tg-hint);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.history-filter-tab.active {
+  border-color: color-mix(in srgb, var(--lime) 55%, transparent);
+  color: var(--lime-ink);
+  background: color-mix(in srgb, var(--lime) 12%, var(--tg-secondary-bg));
+  box-shadow: var(--glow);
+}
+
+/* --- Оповещение об окончании таймера отдыха --- */
+.timer-finished-banner {
+  background: color-mix(in srgb, var(--lime) 15%, var(--tg-secondary-bg));
+  border: 1px solid var(--lime);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  text-align: center;
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--lime-ink);
+  box-shadow: var(--glow);
+  animation: timer-pulse 1s infinite alternate ease-in-out;
+}
+
+@keyframes timer-pulse {
+  from {
+    transform: scale(0.98);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+
+.circular-timer-container.finished {
+  animation: timer-pulse 0.8s infinite alternate ease-in-out;
+}
+.circular-timer-container.finished .timer-circle-fg {
+  stroke: var(--lime);
+  filter: drop-shadow(0 0 8px var(--lime));
+}
+
