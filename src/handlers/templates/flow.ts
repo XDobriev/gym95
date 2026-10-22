@@ -5,6 +5,7 @@ import { renderExerciseMenu } from '../workout/exerciseNameStep';
 import { getExercisesByWorkoutId } from '../../db/exercises';
 import { getCardioSessionsForWorkouts } from '../../db/cardio';
 import { getLastWorkoutForTemplates, getTemplate, listTemplates, WorkoutTemplate } from '../../db/templates';
+import { getRecentWorkouts } from '../../db/workouts';
 import { getUserTimezone } from '../../db/profiles';
 import { progressionSuggestion, suggestNextInRotation } from '../../utils/chain';
 import { parseSetsLine } from '../../utils/setsParser';
@@ -22,6 +23,13 @@ function dateLabel(date?: string): string {
   return `📅 ${d}.${m}\n`;
 }
 
+const TYPE_RU: Record<string, string> = {
+  strength: 'силовая',
+  cardio: 'кардио',
+  pool: 'бассейн',
+  mixed: 'смешанная',
+};
+
 // Какой шаблон предложить первым: следующий в чередовании фулбади.
 async function suggestedTemplate(userId: number, templates: WorkoutTemplate[]): Promise<WorkoutTemplate | null> {
   const rotation = templates
@@ -33,16 +41,23 @@ async function suggestedTemplate(userId: number, templates: WorkoutTemplate[]): 
   return rotation.find((t) => t.id === nextId) ?? null;
 }
 
-// Первый экран /new_workout: шаблоны, «С нуля», «Другая дата».
+// Первый экран /new_workout: повторить прошлую, шаблоны, «С нуля», «Другая дата».
 export async function renderTemplatePicker(ctx: Context, userId: number, viaEdit: boolean): Promise<void> {
   const draft = getDraft(userId);
   if (!draft) return;
   draft.step = 'choosing_template';
 
-  const templates = await listTemplates(userId);
+  const [templates, [lastWorkout]] = await Promise.all([
+    listTemplates(userId),
+    getRecentWorkouts(userId, 1, 0),
+  ]);
   const suggested = await suggestedTemplate(userId, templates);
 
   const rows: InlineKeyboardButton[][] = [];
+  if (lastWorkout) {
+    const label = `🔁 Повторить прошлую (${TYPE_RU[lastWorkout.type] ?? lastWorkout.type})`;
+    rows.push([Markup.button.callback(cut(label), 'tp:repeat_last')]);
+  }
   if (suggested) rows.push([Markup.button.callback(`▶ ${cut(suggested.name)}`, `tp:use:${suggested.id}`)]);
   const rest = templates.filter((t) => t.id !== suggested?.id).map((t) => Markup.button.callback(cut(t.name), `tp:use:${t.id}`));
   for (let i = 0; i < rest.length; i += 2) rows.push(rest.slice(i, i + 2));
@@ -57,6 +72,45 @@ export async function renderTemplatePicker(ctx: Context, userId: number, viaEdit
 
   if (viaEdit) await ctx.editMessageText(text, { reply_markup });
   else await ctx.reply(text, { reply_markup });
+}
+
+// Повторить прошлую тренировку: загружает упражнения и веса последнего раза
+export async function handleRepeatLastWorkout(ctx: Context): Promise<void> {
+  const userId = ctx.from!.id;
+  const draft = getDraft(userId);
+  if (!draft) return;
+
+  const [last] = await getRecentWorkouts(userId, 1, 0);
+  if (!last) {
+    await ctx.reply('У тебя пока нет сохранённых тренировок.');
+    return;
+  }
+
+  const [lastExercises, lastCardio] = await Promise.all([
+    getExercisesByWorkoutId(last.id),
+    getCardioSessionsForWorkouts([last.id]),
+  ]);
+
+  draft.type = last.type;
+  draft.templateId = last.template_id ?? undefined;
+  draft.templateName = 'Прошлая тренировка';
+  draft.templateLastDate = last.date;
+  draft.exercises = lastExercises.map((e, i) => ({
+    name: e.name,
+    sets: e.sets.map((s) => ({ ...s })),
+    orderIndex: i,
+  }));
+
+  const c = lastCardio[0];
+  draft.cardio = c
+    ? {
+        activity: c.activity,
+        durationMinutes: last.duration_minutes ?? undefined,
+        distanceKm: c.distance_km ?? undefined,
+      }
+    : undefined;
+
+  await renderTemplatePreview(ctx, userId, true);
 }
 
 // Выбор шаблона: черновик заполняется значениями прошлого раза по этому шаблону

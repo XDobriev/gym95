@@ -60,6 +60,7 @@ import {
   handleTemplateEditCardio,
   handleTemplateCardioEntered,
   handleTemplateAddExercise,
+  handleRepeatLastWorkout,
 } from '../templates/flow';
 
 // Под сообщением «Тренировка сохранена» — предложение сохранить её как свой шаблон.
@@ -259,6 +260,13 @@ export function registerWorkout(bot: Telegraf): void {
     if (!draft) return;
     draft.step = 'choosing_type';
     await ctx.editMessageText(typePromptText(draft.date), { reply_markup: typeKeyboard() });
+  });
+
+  bot.action('tp:repeat_last', async (ctx) => {
+    await ctx.answerCbQuery();
+    const draft = getDraft(ctx.from.id);
+    if (!draft || draft.step !== 'choosing_template') return;
+    await handleRepeatLastWorkout(ctx);
   });
 
   bot.action(/^tp:use:([0-9a-f-]{36})$/, async (ctx) => {
