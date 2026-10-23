@@ -8,10 +8,19 @@ import {
   DraftExercise,
   calculateSessionVolume,
   getGhostValues,
+  calculateExerciseTarget,
   loadWorkoutDraft,
   saveWorkoutDraft,
   clearWorkoutDraft,
 } from '../utils/liveWorkout';
+import { calculatePlates, calculateWarmupSets, BAR_WEIGHT_OPTIONS } from '../utils/plates';
+import { createSpeechRecognizer, isSpeechRecognitionSupported, parseVoiceWorkoutSet } from '../utils/voiceDictation';
+import {
+  generateWorkoutShareCard,
+  shareOrDownloadWorkoutCard,
+  formatWorkoutSummaryText,
+  ShareCardData,
+} from '../utils/shareCard';
 
 interface LiveWorkoutScreenProps {
   onWorkoutsChanged?: () => void;
@@ -59,6 +68,29 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
   const [finishResult, setFinishResult] = useState<SaveLiveWorkoutResponse | null>(null);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState('');
+
+  // Вектор 1: Калькулятор блинов
+  const [activePlateCalc, setActivePlateCalc] = useState<{
+    exerciseName: string;
+    exerciseId: string;
+    currentWeight: number;
+    barWeight: number;
+  } | null>(null);
+
+  // Вектор 1: RIR селектор
+  const [rirPickerTarget, setRirPickerTarget] = useState<{
+    exerciseId: string;
+    setId: string;
+    currentRir: number | null;
+  } | null>(null);
+
+  // Вектор 2: Голосовой ввод
+  const [isListeningExerciseId, setIsListeningExerciseId] = useState<string | null>(null);
+  const recognizerRef = useRef<{ start: () => void; stop: () => void } | null>(null);
+
+  // Вектор 3: Stories Share Card
+  const [generatingShareCard, setGeneratingShareCard] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -407,6 +439,201 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
     }
   };
 
+  // Вектор 2: Применить цель на сегодня к незаполненным подходам
+  const applyTargetToExercise = (exerciseId: string, weight: number, reps: number) => {
+    if (!draft) return;
+    haptic('medium');
+    updateDraft({
+      ...draft,
+      exercises: draft.exercises.map((e) => {
+        if (e.id !== exerciseId) return e;
+        return {
+          ...e,
+          sets: e.sets.map((s) => (s.completed ? s : { ...s, weight, reps })),
+        };
+      }),
+    });
+  };
+
+  // Вектор 1: Открытие калькулятора блинов
+  const handleOpenPlateCalc = (exercise: DraftExercise) => {
+    haptic('light');
+    const firstSetWeight =
+      typeof exercise.sets[0]?.weight === 'number' && exercise.sets[0].weight > 0
+        ? exercise.sets[0].weight
+        : 60;
+    setActivePlateCalc({
+      exerciseName: exercise.name,
+      exerciseId: exercise.id,
+      currentWeight: firstSetWeight,
+      barWeight: 20,
+    });
+  };
+
+  // Вектор 1: RIR селектор
+  const handleOpenRirPicker = (exerciseId: string, setId: string, currentRir?: number | null) => {
+    haptic('light');
+    setRirPickerTarget({ exerciseId, setId, currentRir: currentRir ?? null });
+  };
+
+  const handleSelectRir = (rir: number | null) => {
+    if (!draft || !rirPickerTarget) return;
+    haptic('light');
+    const { exerciseId, setId } = rirPickerTarget;
+
+    updateDraft({
+      ...draft,
+      exercises: draft.exercises.map((e) => {
+        if (e.id !== exerciseId) return e;
+        return {
+          ...e,
+          sets: e.sets.map((s) => (s.id === setId ? { ...s, rir } : s)),
+        };
+      }),
+    });
+    setRirPickerTarget(null);
+  };
+
+  // Вектор 2: Голосовой ввод подхода
+  const handleToggleVoice = (exerciseId: string) => {
+    if (isListeningExerciseId === exerciseId) {
+      recognizerRef.current?.stop();
+      setIsListeningExerciseId(null);
+      return;
+    }
+
+    if (!isSpeechRecognitionSupported()) {
+      const text = prompt('Быстрый ввод подхода (например: "85 на 8" или "100 6"):');
+      if (text) {
+        const parsed = parseVoiceWorkoutSet(text);
+        if (parsed) {
+          applyParsedVoiceSet(exerciseId, parsed.weight, parsed.reps);
+        } else {
+          alert('Не удалось распознать вес и повторения. Попробуйте формат: 85 на 8');
+        }
+      }
+      return;
+    }
+
+    unlockAudio();
+    haptic('medium');
+    setIsListeningExerciseId(exerciseId);
+
+    const recognizer = createSpeechRecognizer(
+      (_raw, parsed) => {
+        if (parsed) {
+          applyParsedVoiceSet(exerciseId, parsed.weight, parsed.reps);
+        }
+        setIsListeningExerciseId(null);
+      },
+      (err) => {
+        console.warn('Voice recognition error:', err);
+        setIsListeningExerciseId(null);
+      },
+      () => {
+        setIsListeningExerciseId(null);
+      }
+    );
+
+    recognizerRef.current = recognizer;
+    recognizer?.start();
+  };
+
+  const applyParsedVoiceSet = (exerciseId: string, weight: number, reps: number) => {
+    if (!draft) return;
+    notifyHaptic('success');
+
+    updateDraft({
+      ...draft,
+      exercises: draft.exercises.map((e) => {
+        if (e.id !== exerciseId) return e;
+        const targetSet = e.sets.find((s) => !s.completed) || e.sets[e.sets.length - 1];
+        if (!targetSet) return e;
+
+        return {
+          ...e,
+          sets: e.sets.map((s) =>
+            s.id === targetSet.id ? { ...s, weight, reps, completed: true } : s
+          ),
+        };
+      }),
+    });
+
+    setRestSecondsLeft(90);
+  };
+
+  // Вектор 3: Генерация и шаринг Stories Card
+  const getShareCardData = (): ShareCardData => {
+    const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+    const exercisesData = (draft?.exercises || []).map((ex) => {
+      let bestSet = { weight: 0, reps: 0 };
+      let completedSetsCount = 0;
+      for (const s of ex.sets) {
+        if (s.completed && typeof s.weight === 'number' && typeof s.reps === 'number') {
+          completedSetsCount++;
+          if (s.weight > bestSet.weight) {
+            bestSet = { weight: s.weight, reps: s.reps };
+          }
+        }
+      }
+      return {
+        name: ex.name,
+        bestSet,
+        totalSets: completedSetsCount || ex.sets.length,
+      };
+    });
+
+    const sharePrs = (finishResult?.newPrs || []).map((pr) => ({
+      exercise: pr.exercise,
+      weight: pr.weight,
+      reps: pr.reps,
+      oneRepMax: pr.oneRepMax,
+    }));
+
+    return {
+      dateStr: new Date().toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
+      durationMinutes,
+      totalVolumeKg: currentVolume,
+      totalSets: exercisesData.reduce((acc, e) => acc + e.totalSets, 0),
+      exercises: exercisesData,
+      newPrs: sharePrs,
+    };
+  };
+
+  const handleShareStory = async () => {
+    try {
+      setGeneratingShareCard(true);
+      haptic('medium');
+      const shareData = getShareCardData();
+      const blob = await generateWorkoutShareCard(shareData);
+      await shareOrDownloadWorkoutCard(blob, `gym95-workout-${Date.now()}.png`);
+      notifyHaptic('success');
+    } catch (err) {
+      console.error('Ошибка создания Stories карточки:', err);
+      notifyHaptic('error');
+    } finally {
+      setGeneratingShareCard(false);
+    }
+  };
+
+  const handleCopySummary = async () => {
+    try {
+      haptic('light');
+      const shareData = getShareCardData();
+      const text = formatWorkoutSummaryText(shareData);
+      await navigator.clipboard.writeText(text);
+      notifyHaptic('success');
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 3000);
+    } catch (err) {
+      console.warn('Не удалось скопировать текст в буфер:', err);
+    }
+  };
+
   // Каталог упражнений с поиском и фильтром по мышцам
   const filteredCatalog = useMemo(() => {
     let list = context?.commonExercises || [];
@@ -546,14 +773,71 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
                     <span className="exercise-num">{exIndex + 1}</span>
                     <h3 className="exercise-name">{exercise.name}</h3>
                   </div>
-                  <button
-                    className="btn-del-exercise"
-                    onClick={() => removeExerciseFromDraft(exercise.id)}
-                    title="Удалить упражнение"
-                  >
-                    🗑
-                  </button>
+                  <div className="exercise-header-actions">
+                    <button
+                      type="button"
+                      className="btn-action-icon"
+                      onClick={() => handleOpenPlateCalc(exercise)}
+                      title="Калькулятор блинов"
+                      aria-label={`Калькулятор блинов для упражнения ${exercise.name}`}
+                    >
+                      🥞
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn-action-icon btn-voice-input ${
+                        isListeningExerciseId === exercise.id ? 'listening' : ''
+                      }`}
+                      onClick={() => handleToggleVoice(exercise.id)}
+                      title={
+                        isListeningExerciseId === exercise.id
+                          ? 'Идёт запись... Скажите: 85 на 8'
+                          : 'Голосовой ввод подхода (напр. "85 на 8")'
+                      }
+                      aria-label={`Голосовой ввод подхода для упражнения ${exercise.name}`}
+                    >
+                      🎙️
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-action-icon"
+                      onClick={() => removeExerciseFromDraft(exercise.id)}
+                      title="Удалить упражнение"
+                      aria-label={`Удалить упражнение ${exercise.name}`}
+                    >
+                      🗑
+                    </button>
+                  </div>
                 </div>
+
+                {/* Вектор 2: AI Прогрессия / Цель на сегодня */}
+                {(() => {
+                  const target = calculateExerciseTarget(context?.lastWorkout, exercise.name);
+                  if (!target) return null;
+                  return (
+                    <div className="ai-target-banner">
+                      <div className="ai-target-info">
+                        <span className="ai-target-title">🎯 Цель на сегодня</span>
+                        <div className="ai-target-text">
+                          {target.targetWeight} кг × {target.targetReps} повт.{' '}
+                          <span className="ai-target-subtext">(1RM ~{target.estimated1RM} кг)</span>
+                        </div>
+                        <div className="ai-target-subtext">{target.reason}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-apply-target"
+                        onClick={() =>
+                          applyTargetToExercise(exercise.id, target.targetWeight, target.targetReps)
+                        }
+                        title="Подставить цель в незавершенные подходы"
+                        aria-label={`Применить цель ${target.targetWeight} кг на ${target.targetReps} повторений`}
+                      >
+                        Вставить ➔
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* Таблица сетов */}
                 <div className="sets-table">
@@ -562,6 +846,7 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
                     <div className="set-col-prev">Прошлый</div>
                     <div className="set-col-kg">Кг</div>
                     <div className="set-col-reps">Повт</div>
+                    <div className="set-col-rir" title="Запас повторений в подходе">RIR</div>
                     <div className="set-col-check">✓</div>
                   </div>
 
@@ -584,6 +869,7 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
                             className="set-input"
                             placeholder={ghost.weight > 0 ? String(ghost.weight) : '0'}
                             value={set.weight}
+                            aria-label={`Вес в кг для подхода ${setIndex + 1} упражнения ${exercise.name}`}
                             onChange={(e) =>
                               updateSetValue(exercise.id, set.id, 'weight', e.target.value)
                             }
@@ -596,15 +882,35 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
                             className="set-input"
                             placeholder={String(ghost.reps)}
                             value={set.reps}
+                            aria-label={`Повторения для подхода ${setIndex + 1} упражнения ${exercise.name}`}
                             onChange={(e) =>
                               updateSetValue(exercise.id, set.id, 'reps', e.target.value)
                             }
                           />
                         </div>
+                        <div className="set-col-rir">
+                          <button
+                            type="button"
+                            className={`btn-rir-selector ${
+                              set.rir !== undefined && set.rir !== null ? 'rir-active' : ''
+                            }`}
+                            onClick={() => handleOpenRirPicker(exercise.id, set.id, set.rir)}
+                            title="Запас повторений (RIR: 0 = отказ)"
+                            aria-label={`Запас повторений RIR для подхода ${setIndex + 1}`}
+                          >
+                            {set.rir !== undefined && set.rir !== null
+                              ? set.rir === 0
+                                ? '0 🔥'
+                                : `${set.rir}`
+                              : '—'}
+                          </button>
+                        </div>
                         <div className="set-col-check">
                           <button
+                            type="button"
                             className={`btn-check-set ${set.completed ? 'checked' : ''}`}
                             onClick={() => toggleSetComplete(exercise.id, set.id, setIndex)}
+                            aria-label={`Отметить подход ${setIndex + 1} выполненным`}
                           >
                             {set.completed ? '✓' : '◯'}
                           </button>
@@ -761,8 +1067,29 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
                   </div>
                 )}
 
+                <div className="share-actions-row">
+                  <button
+                    type="button"
+                    className="btn-share-story"
+                    disabled={generatingShareCard}
+                    onClick={handleShareStory}
+                    aria-label="Поделиться карточкой тренировки в Stories"
+                  >
+                    {generatingShareCard ? 'Генерация Stories...' : '📸 Поделиться в Stories'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-copy-summary"
+                    onClick={handleCopySummary}
+                    aria-label="Скопировать текстовую сводку тренировки"
+                  >
+                    {copiedSummary ? '✓ Скопировано в буфер!' : '📋 Скопировать текст'}
+                  </button>
+                </div>
+
                 <button
                   className="btn-finish-confirm"
+                  style={{ marginTop: '14px' }}
                   onClick={() => {
                     setShowFinishModal(false);
                     setDraft(null);
@@ -828,6 +1155,248 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Модалка калькулятора блинов */}
+      {activePlateCalc && (
+        <div className="plates-modal-overlay" onClick={() => setActivePlateCalc(null)}>
+          <div className="plates-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="plates-modal-header">
+              <div className="plates-modal-title">
+                <span>🥞 Калькулятор блинов</span>
+              </div>
+              <button
+                type="button"
+                className="btn-finish-back"
+                onClick={() => setActivePlateCalc(null)}
+                aria-label="Закрыть калькулятор блинов"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--tg-hint)',
+                  fontWeight: 700,
+                  display: 'block',
+                  marginBottom: '6px',
+                }}
+              >
+                ВЕС ШТАНГИ (КГ):
+              </label>
+              <input
+                type="number"
+                step="any"
+                inputMode="decimal"
+                className="set-input"
+                style={{ fontSize: '18px', minHeight: '44px' }}
+                value={activePlateCalc.currentWeight || ''}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  setActivePlateCalc((prev) => (prev ? { ...prev, currentWeight: val } : null));
+                }}
+                aria-label="Целевой вес штанги в кг"
+              />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--tg-hint)',
+                  fontWeight: 700,
+                  display: 'block',
+                  marginBottom: '6px',
+                }}
+              >
+                ГРИФ:
+              </label>
+              <div className="bar-selector">
+                {BAR_WEIGHT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`bar-opt-btn ${
+                      activePlateCalc.barWeight === opt.weight ? 'active' : ''
+                    }`}
+                    onClick={() => {
+                      haptic('light');
+                      setActivePlateCalc((prev) =>
+                        prev ? { ...prev, barWeight: opt.weight } : null
+                      );
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Раскладка блинов с каждой стороны */}
+            {(() => {
+              const res = calculatePlates(
+                activePlateCalc.currentWeight,
+                activePlateCalc.barWeight
+              );
+              const warmups = calculateWarmupSets(
+                activePlateCalc.currentWeight,
+                activePlateCalc.barWeight
+              );
+
+              return (
+                <>
+                  <div className="plates-visual-container">
+                    <div className="plates-side-title">
+                      С каждой стороны: {res.weightPerSideKg} кг
+                    </div>
+                    <div className="plates-side-chips">
+                      {res.platesPerSide.length === 0 ? (
+                        <span style={{ fontSize: '13px', color: 'var(--tg-hint)' }}>
+                          Пустой гриф
+                        </span>
+                      ) : (
+                        res.platesPerSide.map((p) => {
+                          const chipClass = `plate-${String(p.plateKg).replace('.', '-')}`;
+                          return Array.from({ length: p.countPerSide }).map((_, idx) => (
+                            <span key={`${p.plateKg}-${idx}`} className={`plate-chip ${chipClass}`}>
+                              {p.plateKg}
+                            </span>
+                          ));
+                        })
+                      )}
+                    </div>
+                    {res.remainderKg > 0 && (
+                      <div
+                        style={{
+                          fontSize: '11px',
+                          color: 'var(--pr)',
+                          marginTop: '8px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ⚠️ Не хватает блинов на {res.remainderKg} кг
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Пирамида разминки */}
+                  <div className="warmup-pyramid">
+                    <div className="warmup-pyramid-title">Разминочные подходы:</div>
+                    {warmups.map((w) => (
+                      <div key={w.setNumber} className="warmup-step-row">
+                        <div>
+                          <span className="warmup-step-weight">{w.weightKg} кг</span>
+                          <span style={{ color: 'var(--tg-hint)', marginLeft: '6px' }}>
+                            × {w.reps} повт.
+                          </span>
+                        </div>
+                        <span style={{ color: 'var(--tg-hint)', fontSize: '11px' }}>{w.note}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: '16px' }}>
+                    <button
+                      type="button"
+                      className="btn-finish-confirm"
+                      onClick={() => {
+                        haptic('medium');
+                        if (draft && activePlateCalc.currentWeight > 0) {
+                          updateDraft({
+                            ...draft,
+                            exercises: draft.exercises.map((e) => {
+                              if (e.id !== activePlateCalc.exerciseId) return e;
+                              return {
+                                ...e,
+                                sets: e.sets.map((s) =>
+                                  s.completed
+                                    ? s
+                                    : { ...s, weight: activePlateCalc.currentWeight }
+                                ),
+                              };
+                            }),
+                          });
+                        }
+                        setActivePlateCalc(null);
+                      }}
+                    >
+                      Применить вес ({activePlateCalc.currentWeight} кг)
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Модалка RIR селектора */}
+      {rirPickerTarget && (
+        <div className="rir-modal-overlay" onClick={() => setRirPickerTarget(null)}>
+          <div className="rir-picker-card" onClick={(e) => e.stopPropagation()}>
+            <div className="rir-picker-title">Запас повторений (RIR)</div>
+            <div className="rir-picker-desc">
+              Сколько повторений ты мог ещё сделать до отказа?
+            </div>
+
+            <div className="rir-options-grid">
+              <button
+                type="button"
+                className={`rir-opt-card ${rirPickerTarget.currentRir === 0 ? 'active' : ''}`}
+                onClick={() => handleSelectRir(0)}
+              >
+                <span className="rir-val">0 🔥</span>
+                <span className="rir-hint">Отказ / Предел</span>
+              </button>
+              <button
+                type="button"
+                className={`rir-opt-card ${rirPickerTarget.currentRir === 1 ? 'active' : ''}`}
+                onClick={() => handleSelectRir(1)}
+              >
+                <span className="rir-val">1</span>
+                <span className="rir-hint">Тяжело (1 в запасе)</span>
+              </button>
+              <button
+                type="button"
+                className={`rir-opt-card ${rirPickerTarget.currentRir === 2 ? 'active' : ''}`}
+                onClick={() => handleSelectRir(2)}
+              >
+                <span className="rir-val">2</span>
+                <span className="rir-hint">Рабочий (2 в запасе)</span>
+              </button>
+              <button
+                type="button"
+                className={`rir-opt-card ${rirPickerTarget.currentRir === 3 ? 'active' : ''}`}
+                onClick={() => handleSelectRir(3)}
+              >
+                <span className="rir-val">3+</span>
+                <span className="rir-hint">Легко / Запас 3+</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn-finish-back"
+                style={{ flex: 1, minHeight: '40px' }}
+                onClick={() => handleSelectRir(null)}
+              >
+                Сбросить
+              </button>
+              <button
+                type="button"
+                className="btn-finish-back"
+                style={{ flex: 1, minHeight: '40px', color: 'var(--tg-text)' }}
+                onClick={() => setRirPickerTarget(null)}
+              >
+                Отмена
+              </button>
+            </div>
           </div>
         </div>
       )}

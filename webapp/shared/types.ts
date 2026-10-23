@@ -140,6 +140,7 @@ export interface CompletedSetInput {
   weight: number;
   reps: number;
   completed: boolean;
+  rir?: number | null;
 }
 
 export interface LiveExerciseInput {

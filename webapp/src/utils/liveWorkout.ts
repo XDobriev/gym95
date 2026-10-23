@@ -5,6 +5,14 @@ export interface DraftSet {
   weight: number | '';
   reps: number | '';
   completed: boolean;
+  rir?: number | null;
+}
+
+export interface ExerciseTargetSuggestion {
+  targetWeight: number;
+  targetReps: number;
+  estimated1RM: number;
+  reason: string;
 }
 
 export interface DraftExercise {
@@ -64,6 +72,50 @@ export function getGhostValues(
 
   const last = pastEx.sets[pastEx.sets.length - 1];
   return { weight: last.weight, reps: last.reps };
+}
+
+export function calculateExerciseTarget(
+  pastWorkout: LivePastWorkout | null | undefined,
+  exerciseName: string
+): ExerciseTargetSuggestion | null {
+  if (!pastWorkout || !pastWorkout.exercises || pastWorkout.exercises.length === 0) {
+    return null;
+  }
+
+  const normTarget = exerciseName.trim().toLowerCase();
+  const pastEx = pastWorkout.exercises.find((e) => e.name.trim().toLowerCase() === normTarget);
+  if (!pastEx || !pastEx.sets || pastEx.sets.length === 0) {
+    return null;
+  }
+
+  const validSets = pastEx.sets.filter((s) => s.weight > 0 && s.reps > 0);
+  if (validSets.length === 0) return null;
+
+  const maxWeight = Math.max(...validSets.map((s) => s.weight));
+  const workSets = validSets.filter((s) => s.weight === maxWeight);
+  const minWorkReps = Math.min(...workSets.map((s) => s.reps));
+
+  // Если во всех рабочих подходах сделано >= 8 повторений — шаг прогрессии веса!
+  if (minWorkReps >= 8) {
+    const step = maxWeight < 20 ? 1 : 2.5;
+    const targetWeight = Math.round((maxWeight + step) * 10) / 10;
+    const targetReps = 8;
+    return {
+      targetWeight,
+      targetReps,
+      estimated1RM: calculateLive1RM(targetWeight, targetReps),
+      reason: `Двойная прогрессия: в прошлый раз закрыто ${maxWeight} кг × ${minWorkReps}+ повт.!`,
+    };
+  }
+
+  // Если цель 8 повторений еще не закрыта — закрепляем текущий вес
+  const targetReps = Math.min(10, Math.max(8, minWorkReps + 1));
+  return {
+    targetWeight: maxWeight,
+    targetReps,
+    estimated1RM: calculateLive1RM(maxWeight, targetReps),
+    reason: `Цель: закрыть все подходы на ${targetReps} повт. с весом ${maxWeight} кг`,
+  };
 }
 
 export function saveWorkoutDraft(draft: ActiveWorkoutDraft): void {
