@@ -7,6 +7,7 @@ import { validateWorkoutInput } from './validateWorkout';
 import { updateWorkout, deleteWorkoutForUser } from './mutations';
 import { getProfileCached } from '../db/profiles';
 import { getBody } from './body';
+import { getLiveContext, saveLiveWorkout } from './live';
 
 const MAX_BODY_BYTES = 64 * 1024; // страховка от гигантского тела запроса
 
@@ -87,6 +88,24 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       return;
     }
 
+    // POST /api/workouts — сохранение тренировки из Live Workout
+    if (method === 'POST' && url.pathname === '/api/workouts') {
+      let body: unknown;
+      try {
+        body = await readJsonBody(req);
+      } catch {
+        sendJson(res, 400, { error: 'Не удалось разобрать тело запроса' });
+        return;
+      }
+      try {
+        const result = await saveLiveWorkout(user.userId, body);
+        sendJson(res, 200, result);
+      } catch (err) {
+        sendJson(res, 400, { error: err instanceof Error ? err.message : 'Ошибка сохранения' });
+      }
+      return;
+    }
+
     if (method !== 'GET') {
       sendJson(res, 405, { error: 'Метод не поддерживается' });
       return;
@@ -95,6 +114,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     switch (url.pathname) {
       case '/api/hello':
         sendJson(res, 200, { userId: user.userId, firstName: user.firstName });
+        return;
+
+      case '/api/live-context':
+        sendJson(res, 200, await getLiveContext(user.userId));
         return;
 
       case '/api/summary':

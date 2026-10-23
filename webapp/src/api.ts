@@ -2,7 +2,10 @@ import { getWebApp } from './telegram';
 import type {
   BodyResponse,
   HistoryResponse,
+  LiveContextResponse,
   ProgressResponse,
+  SaveLiveWorkoutRequest,
+  SaveLiveWorkoutResponse,
   SummaryResponse,
   VolumeHistoryResponse,
   WorkoutUpdateRequest,
@@ -20,6 +23,25 @@ async function get<T>(path: string): Promise<T> {
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new ApiError(res.status, body || res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { ...initDataHeader(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // игнорируем
+    }
+    throw new ApiError(res.status, message);
   }
   return res.json() as Promise<T>;
 }
@@ -67,4 +89,6 @@ export const api = {
   updateWorkout: (id: string, body: WorkoutUpdateRequest) =>
     send(`/api/workout/${encodeURIComponent(id)}`, 'PUT', body),
   deleteWorkout: (id: string) => send(`/api/workout/${encodeURIComponent(id)}`, 'DELETE'),
+  liveContext: () => get<LiveContextResponse>('/api/live-context'),
+  saveLiveWorkout: (body: SaveLiveWorkoutRequest) => post<SaveLiveWorkoutResponse>('/api/workouts', body),
 };

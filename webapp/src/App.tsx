@@ -18,7 +18,12 @@ const BodyScreen = lazy(() => import('./screens/BodyScreen').then((m) => ({ defa
 // Таймер отдыха, секундомер для стадиона и интервалы HIIT/табата.
 const TimerScreen = lazy(() => import('./screens/TimerScreen').then((m) => ({ default: m.TimerScreen })));
 
-type Tab = 'history' | 'progress' | 'body' | 'timer';
+// Интерактивный режим Live Workout прямо у тренажёра.
+const LiveWorkoutScreen = lazy(() =>
+  import('./screens/LiveWorkoutScreen').then((m) => ({ default: m.LiveWorkoutScreen }))
+);
+
+type Tab = 'workout' | 'history' | 'progress' | 'body' | 'timer';
 
 export function App() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
@@ -118,9 +123,16 @@ export function App() {
           <span className="subtitle">{firstName ? `Привет, ${firstName}` : 'Дневник тренировок'}</span>
         </div>
 
-        {summary && tab !== 'body' && tab !== 'timer' && <SummaryBar summary={summary} />}
+        {summary && tab !== 'body' && tab !== 'timer' && tab !== 'workout' && <SummaryBar summary={summary} />}
 
-        {tab === 'history' ? (
+        {tab === 'workout' ? (
+          <Suspense fallback={<Loading />}>
+            <LiveWorkoutScreen
+              onWorkoutsChanged={refreshSummary}
+              onGoToHistory={() => switchTab('history')}
+            />
+          </Suspense>
+        ) : tab === 'history' ? (
           <HistoryScreen onWorkoutsChanged={refreshSummary} onEditingChange={setEditingActive} />
         ) : tab === 'progress' ? (
           <Suspense fallback={<Loading />}>
@@ -138,6 +150,10 @@ export function App() {
       </div>
 
       <nav className="tabbar">
+        <button className={`tab${tab === 'workout' ? ' active' : ''}`} onClick={() => switchTab('workout')}>
+          <span className="tab-icon">⚡</span>
+          В зал
+        </button>
         <button className={`tab${tab === 'history' ? ' active' : ''}`} onClick={() => switchTab('history')}>
           <span className="tab-icon">📅</span>
           История
