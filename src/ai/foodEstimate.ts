@@ -8,7 +8,12 @@ export type Estimate =
   | { isFood: false };
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+const FALLBACK_MODELS = [
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
+];
 const TIMEOUT_MS = 30_000;
 
 const SYSTEM_PROMPT = `Ты оцениваешь калорийность еды по короткому описанию на русском языке.
@@ -93,9 +98,10 @@ export async function estimateFood(description: string): Promise<Estimate> {
       if (/api[ _]?key/i.test(body)) throw new AiError('Ключ Gemini недействителен или без доступа', 'unavailable');
       continue; // модель не поддерживает параметры запроса — пробуем следующую
     }
-    if (res.status === 404) continue; // модель переименована/снята — следующая
-    if (res.status === 429) throw new AiError('Лимит бесплатного тарифа Gemini исчерпан', 'quota');
-    if (!res.ok) throw new AiError(`Gemini ответил ${res.status}`, 'unavailable');
+    if (res.status === 404 || res.status === 429 || res.status === 500 || res.status === 503) {
+      continue; // перегрузка или лимит на этой модели — пробуем следующую
+    }
+    if (!res.ok) continue;
 
     const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
@@ -166,9 +172,10 @@ export async function estimateFoodFromImage(
       if (/api[ _]?key/i.test(body)) throw new AiError('Ключ Gemini недействителен или без доступа', 'unavailable');
       continue;
     }
-    if (res.status === 404) continue;
-    if (res.status === 429) throw new AiError('Лимит бесплатного тарифа Gemini исчерпан', 'quota');
-    if (!res.ok) throw new AiError(`Gemini ответил ${res.status}`, 'unavailable');
+    if (res.status === 404 || res.status === 429 || res.status === 500 || res.status === 503) {
+      continue;
+    }
+    if (!res.ok) continue;
 
     const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
