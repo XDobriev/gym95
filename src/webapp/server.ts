@@ -8,6 +8,7 @@ import { updateWorkout, deleteWorkoutForUser } from './mutations';
 import { getProfileCached } from '../db/profiles';
 import { getBody } from './body';
 import { getLiveContext, saveLiveWorkout } from './live';
+import { estimateFood } from '../ai/foodEstimate';
 
 const MAX_BODY_BYTES = 64 * 1024; // страховка от гигантского тела запроса
 
@@ -249,8 +250,24 @@ async function tryReadFile(filePath: string): Promise<Buffer | null> {
 export function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? '/', 'http://localhost');
 
-  if (url.pathname === '/healthz') {
+  if (url.pathname === '/healthz' || url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' }).end('ok');
+    return;
+  }
+
+  if (url.pathname === '/debug-ai') {
+    void (async () => {
+      try {
+        const est = await estimateFood('5 оладушков с протеином');
+        sendJson(res, 200, { ok: true, est, keyLen: process.env.GEMINI_API_KEY?.length ?? 0 });
+      } catch (err) {
+        sendJson(res, 200, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          keyLen: process.env.GEMINI_API_KEY?.length ?? 0,
+        });
+      }
+    })();
     return;
   }
 

@@ -95,10 +95,11 @@ export async function parseVoiceAction(audioBase64: string, mimeType = 'audio/og
   try {
     for (const model of models()) {
       try {
-        const res = await fetch(`${API_BASE}/${model}:generateContent`, {
+        const key = (process.env.GEMINI_API_KEY ?? '').trim();
+        const res = await fetch(`${API_BASE}/${model}:generateContent?key=${encodeURIComponent(key)}`, {
           method: 'POST',
           signal: controller.signal,
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY ?? '' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: VOICE_PROMPT }] },
             contents: [

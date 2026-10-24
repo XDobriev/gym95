@@ -58,10 +58,11 @@ async function callModel(model: string, description: string): Promise<Response> 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    return await fetch(`${API_BASE}/${model}:generateContent`, {
+    const key = (process.env.GEMINI_API_KEY ?? '').trim();
+    return await fetch(`${API_BASE}/${model}:generateContent?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY ?? '' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: description }] }],
@@ -114,10 +115,11 @@ async function callModelWithImage(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    return await fetch(`${API_BASE}/${model}:generateContent`, {
+    const key = (process.env.GEMINI_API_KEY ?? '').trim();
+    return await fetch(`${API_BASE}/${model}:generateContent?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY ?? '' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [
