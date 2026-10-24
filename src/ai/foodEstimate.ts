@@ -8,7 +8,7 @@ export type Estimate =
   | { isFood: false };
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest'];
+const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
 const TIMEOUT_MS = 20_000;
 
 const SYSTEM_PROMPT = `Ты оцениваешь калорийность еды по короткому описанию на русском языке.
