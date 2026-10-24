@@ -9,7 +9,7 @@ export type Estimate =
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
-const TIMEOUT_MS = 20_000;
+const TIMEOUT_MS = 30_000;
 
 const SYSTEM_PROMPT = `Ты оцениваешь калорийность еды по короткому описанию на русском языке.
 Если размер порции не указан — бери типичную домашнюю порцию для взрослого.
@@ -65,7 +65,11 @@ async function callModel(model: string, description: string): Promise<Response> 
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: description }] }],
-        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
     });
   } finally {
@@ -129,7 +133,11 @@ async function callModelWithImage(
             ],
           },
         ],
-        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
     });
   } finally {

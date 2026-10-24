@@ -110,7 +110,11 @@ export async function parseVoiceAction(audioBase64: string, mimeType = 'audio/og
                 ],
               },
             ],
-            generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              thinkingConfig: { thinkingBudget: 0 },
+            },
           }),
         });
 
