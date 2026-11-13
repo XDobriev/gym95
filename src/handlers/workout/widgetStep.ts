@@ -16,6 +16,10 @@ import { renderExerciseSavedMenu } from './setsInputStep';
 import { exerciseSavedMenuKeyboard, exerciseNameKeyboard } from './keyboards';
 import { saveDraftWorkout } from './finish';
 import { getLastExercisesByUser } from '../../db/exercises';
+import { addWater, undoLastWater } from '../../db/water';
+import { getUserTimezone } from '../../db/profiles';
+import { getWaterStatus } from '../../modules/water';
+import { localNow } from '../../utils/time';
 
 /**
  * Attempts to send an interactive Live Workout HTML widget for the chosen exercise.
@@ -101,6 +105,52 @@ export async function handleWidgetQuery(ctx: Context, query: WidgetQueryData): P
   const userId = query.from?.id;
   if (!userId) return;
 
+  const payload = parseWidgetQueryPayload(query.data);
+
+  // Калькулятор блинов (клиентские обновления)
+  if (payload.action === 'plates_calc') {
+    await answerWidgetQuery(ctx.telegram, {
+      widget_query_id: query.id,
+    }).catch(() => {});
+    return;
+  }
+
+  // Трекер воды
+  if (payload.action === 'water_add' || payload.action === 'water_undo') {
+    const tz = await getUserTimezone(userId);
+    const today = localNow(tz).dateStr;
+    const chatId = query.message?.chat?.id || userId;
+    const msgId = query.message?.message_id;
+
+    if (payload.action === 'water_add') {
+      const amount = Number(payload.amount) || 250;
+      await addWater(userId, today, amount);
+      await answerWidgetQuery(ctx.telegram, {
+        widget_query_id: query.id,
+        text: `+${amount} мл записано!`,
+      }).catch(() => {});
+    } else {
+      const ok = await undoLastWater(userId, today);
+      await answerWidgetQuery(ctx.telegram, {
+        widget_query_id: query.id,
+        text: ok ? 'Отменено' : 'Сегодня ещё нечего отменять',
+      }).catch(() => {});
+    }
+
+    if (msgId && chatId) {
+      const status = await getWaterStatus(userId, tz, today);
+      await editMessageWidgetData(ctx.telegram, {
+        chat_id: chatId,
+        message_id: msgId,
+        chat_data: JSON.stringify({
+          drunkMl: status.drunkMl,
+          targetMl: status.targetMl,
+        }),
+      }).catch(() => {});
+    }
+    return;
+  }
+
   const draft = getDraft(userId);
   if (!draft) {
     await answerWidgetQuery(ctx.telegram, {
@@ -110,8 +160,6 @@ export async function handleWidgetQuery(ctx: Context, query: WidgetQueryData): P
     }).catch(() => {});
     return;
   }
-
-  const payload = parseWidgetQueryPayload(query.data);
   const exName = draft.currentExerciseName || 'Упражнение';
   const msgId = query.message?.message_id || draft.widgetMessageId;
   const chatId = query.message?.chat?.id || draft.chatId || userId;

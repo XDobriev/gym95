@@ -53,7 +53,10 @@ export type WidgetActionType =
   | 'finish_exercise'
   | 'add_set'
   | 'next_exercise'
-  | 'finish_workout';
+  | 'finish_workout'
+  | 'water_add'
+  | 'water_undo'
+  | 'plates_calc';
 
 export interface TelegramWidgetQueryPayload {
   action: WidgetActionType;
@@ -61,6 +64,9 @@ export interface TelegramWidgetQueryPayload {
   reps?: number;
   setIndex?: number;
   restAdded?: number;
+  amount?: number;
+  targetWeight?: number;
+  barWeight?: number;
 }
 
 export interface WidgetQueryData {
@@ -190,6 +196,9 @@ export function parseWidgetQueryPayload(raw: string | undefined): TelegramWidget
       reps: data.reps !== undefined ? Number(data.reps) : undefined,
       setIndex: data.setIndex !== undefined ? Number(data.setIndex) : undefined,
       restAdded: data.restAdded !== undefined ? Number(data.restAdded) : undefined,
+      amount: data.amount !== undefined ? Number(data.amount) : undefined,
+      targetWeight: data.targetWeight !== undefined ? Number(data.targetWeight) : undefined,
+      barWeight: data.barWeight !== undefined ? Number(data.barWeight) : undefined,
     };
   } catch {
     return { action: 'finish_set' };

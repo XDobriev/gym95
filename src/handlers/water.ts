@@ -3,6 +3,8 @@ import { addWater, undoLastWater } from '../db/water';
 import { getUserTimezone } from '../db/profiles';
 import { getWaterStatus, waterStatusText } from '../modules/water';
 import { localNow } from '../utils/time';
+import { generateWaterWidgetHtml } from '../templates/waterWidget';
+import { sendWidget, editMessageWidgetData, answerWidgetQuery } from '../utils/telegramWidgets';
 
 export function waterKeyboard() {
   return Markup.inlineKeyboard([
@@ -24,13 +26,44 @@ export async function sendWaterStatus(ctx: Context, userId: number): Promise<voi
   await ctx.reply(await statusFor(userId), { reply_markup: waterKeyboard() });
 }
 
+export async function sendWaterOutput(ctx: Context, userId: number): Promise<void> {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+
+  const tz = await getUserTimezone(userId);
+  const status = await getWaterStatus(userId, tz, localNow(tz).dateStr);
+
+  try {
+    const html = generateWaterWidgetHtml({
+      initialState: {
+        drunkMl: status.drunkMl,
+        targetMl: status.targetMl,
+        workoutBonus: status.workoutBonus,
+      },
+    });
+    await sendWidget(ctx.telegram, {
+      chat_id: chatId,
+      html,
+      chat_data: JSON.stringify({
+        drunkMl: status.drunkMl,
+        targetMl: status.targetMl,
+      }),
+    });
+    return;
+  } catch (err) {
+    // Graceful fallback для клиентов без поддержки HTML-виджетов
+  }
+
+  await sendWaterStatus(ctx, userId);
+}
+
 async function refresh(ctx: Context, userId: number): Promise<void> {
   await ctx.editMessageText(await statusFor(userId), { reply_markup: waterKeyboard() }).catch(() => undefined);
 }
 
 export function registerWater(bot: Telegraf): void {
   bot.command('water', async (ctx) => {
-    await sendWaterStatus(ctx, ctx.from.id);
+    await sendWaterOutput(ctx, ctx.from.id);
   });
 
   bot.action(/^wa:add:(250|500|750)$/, async (ctx) => {

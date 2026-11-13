@@ -1,5 +1,7 @@
-import { Markup, Telegraf } from 'telegraf';
+import { Context, Markup, Telegraf } from 'telegraf';
 import { formatPlatesSummary } from '../utils/plates';
+import { generatePlatesWidgetHtml } from '../templates/platesWidget';
+import { sendWidget } from '../utils/telegramWidgets';
 
 export function platesKeyboard(targetWeightKg: number, currentBarWeightKg: number) {
   const bars = [20, 15, 10];
@@ -22,6 +24,36 @@ export function platesPresetKeyboard() {
       Markup.button.callback('120 кг', 'calc:wt:120'),
     ],
   ]).reply_markup;
+}
+
+export async function sendPlatesOutput(
+  ctx: Context,
+  weightKg: number,
+  barWeightKg = 20
+): Promise<void> {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+
+  // Попытка отправить современный интерактивный HTML-виджет (Telegram Bot API 10.4)
+  try {
+    const html = generatePlatesWidgetHtml({
+      initialState: { targetWeight: weightKg, barWeight: barWeightKg },
+    });
+    await sendWidget(ctx.telegram, {
+      chat_id: chatId,
+      html,
+      chat_data: JSON.stringify({ targetWeight: weightKg, barWeight: barWeightKg }),
+    });
+    return;
+  } catch (err) {
+    // Graceful fallback для старых клиентов Telegram или при ошибке Bot API
+  }
+
+  const summary = formatPlatesSummary(weightKg, barWeightKg);
+  await ctx.reply(summary, {
+    parse_mode: 'Markdown',
+    reply_markup: platesKeyboard(weightKg, barWeightKg),
+  });
 }
 
 export function registerPlates(bot: Telegraf): void {
@@ -54,14 +86,10 @@ export function registerPlates(bot: Telegraf): void {
       return;
     }
 
-    const summary = formatPlatesSummary(weightKg, barWeightKg);
-    await ctx.reply(summary, {
-      parse_mode: 'Markdown',
-      reply_markup: platesKeyboard(weightKg, barWeightKg),
-    });
+    await sendPlatesOutput(ctx, weightKg, barWeightKg);
   });
 
-  // Переключение веса грифа по инлайн-кнопкам
+  // Переключение веса грифа по инлайн-кнопкам (fallback)
   bot.action(/^calc:bar:(\d+(?:\.\d+)?):(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const targetWeightKg = parseFloat(ctx.match[1]);
@@ -77,11 +105,6 @@ export function registerPlates(bot: Telegraf): void {
   bot.action(/^calc:wt:(\d+(?:\.\d+)?)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const weightKg = parseFloat(ctx.match[1]);
-    const summary = formatPlatesSummary(weightKg, 20);
-    await ctx.reply(summary, {
-      parse_mode: 'Markdown',
-      reply_markup: platesKeyboard(weightKg, 20),
-    });
+    await sendPlatesOutput(ctx, weightKg, 20);
   });
 }
-

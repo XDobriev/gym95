@@ -277,3 +277,67 @@ test('handleWidgetQuery: handles finish_exercise and add_set actions', async () 
 
   clearDraft(userId);
 });
+
+test('handleWidgetQuery: routes plates_calc without requiring active workout draft', async () => {
+  const userId = 777008;
+  clearDraft(userId); // ensure no active workout draft
+
+  const apiCalls: { method: string; data: any }[] = [];
+  const mockCtx: any = {
+    telegram: {
+      callApi: async (method: any, data: any) => {
+        apiCalls.push({ method, data });
+        return true;
+      },
+    },
+  };
+
+  await handleWidgetQuery(mockCtx, {
+    id: 'q_plates_1',
+    from: { id: userId, first_name: 'Athlete' },
+    data: JSON.stringify({ action: 'plates_calc', targetWeight: 100, barWeight: 20 }),
+  });
+
+  const answerCall = apiCalls.find((c) => c.method === 'answerWidgetQuery');
+  assert.ok(answerCall, 'Must answer widget query');
+  assert.equal(answerCall.data.widget_query_id, 'q_plates_1');
+});
+
+test('handleWidgetQuery: routes water_add and water_undo without requiring active workout draft', async () => {
+  const userId = 777009;
+  const chatId = 888009;
+  clearDraft(userId); // ensure no active workout draft
+
+  const apiCalls: { method: string; data: any }[] = [];
+  const mockCtx: any = {
+    telegram: {
+      callApi: async (method: any, data: any) => {
+        apiCalls.push({ method, data });
+        return true;
+      },
+    },
+  };
+
+  // 1. water_add
+  await handleWidgetQuery(mockCtx, {
+    id: 'q_water_1',
+    from: { id: userId, first_name: 'Athlete' },
+    message: { message_id: 333, chat: { id: chatId, type: 'private' } },
+    data: JSON.stringify({ action: 'water_add', amount: 500 }),
+  });
+
+  const answerCall1 = apiCalls.find((c) => c.method === 'answerWidgetQuery');
+  assert.ok(answerCall1, 'Must answer water widget query');
+  assert.ok(answerCall1.data.text.includes('+500 мл'));
+
+  // 2. water_undo
+  await handleWidgetQuery(mockCtx, {
+    id: 'q_water_2',
+    from: { id: userId, first_name: 'Athlete' },
+    message: { message_id: 333, chat: { id: chatId, type: 'private' } },
+    data: JSON.stringify({ action: 'water_undo' }),
+  });
+
+  const answerCall2 = apiCalls.filter((c) => c.method === 'answerWidgetQuery')[1];
+  assert.ok(answerCall2, 'Must answer water undo query');
+});
