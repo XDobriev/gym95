@@ -60,4 +60,6 @@ export interface DraftWorkout {
   startedAt: number;
   chatId: number;
   lastMessageId?: number;
+  widgetMessageId?: number;
+  useWidget?: boolean;
 }

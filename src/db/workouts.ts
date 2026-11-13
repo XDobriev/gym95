@@ -1,5 +1,42 @@
 import { supabase } from './client';
-import { Workout, WorkoutType } from '../types/domain';
+import { Workout, WorkoutType, SetEntry } from '../types/domain';
+import { addExercise } from './exercises';
+
+export { addExercise };
+
+/**
+ * Saves or updates sets for an exercise within a workout.
+ */
+export async function saveExerciseSets(
+  workoutId: string,
+  exerciseName: string,
+  sets: SetEntry[]
+): Promise<void> {
+  const { data: existing, error: findError } = await supabase
+    .from('exercises')
+    .select('id')
+    .eq('workout_id', workoutId)
+    .eq('name', exerciseName)
+    .maybeSingle();
+
+  if (findError) throw new Error(`saveExerciseSets/find: ${findError.message}`);
+
+  if (existing?.id) {
+    const { error: updError } = await supabase
+      .from('exercises')
+      .update({ sets })
+      .eq('id', existing.id);
+    if (updError) throw new Error(`saveExerciseSets/update: ${updError.message}`);
+  } else {
+    const { error: insError } = await supabase.from('exercises').insert({
+      workout_id: workoutId,
+      name: exerciseName,
+      sets,
+      order_index: 0,
+    });
+    if (insError) throw new Error(`saveExerciseSets/insert: ${insError.message}`);
+  }
+}
 
 export async function createWorkout(params: {
   userId: number;

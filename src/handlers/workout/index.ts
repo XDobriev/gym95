@@ -48,6 +48,7 @@ import {
   askForPulse,
   finalizeCardioBlock,
 } from './cardioStep';
+import { handleWidgetQuery } from './widgetStep';
 import { saveDraftWorkout, FinishResult } from './finish';
 import { Markup } from 'telegraf';
 import {
@@ -243,6 +244,27 @@ async function applyChosenDate(ctx: Context, userId: number, dateStr: string | u
 }
 
 export function registerWorkout(bot: Telegraf): void {
+  // Telegram Bot API 10.4 Widget Query updates
+  bot.use(async (ctx, next) => {
+    if (ctx.update && 'widget_query' in ctx.update) {
+      const wq = (ctx.update as any).widget_query;
+      if (!ctx.from && wq.from) {
+        Object.defineProperty(ctx, 'from', { value: wq.from, configurable: true, writable: true });
+      }
+      if (!ctx.chat && wq.message?.chat) {
+        Object.defineProperty(ctx, 'chat', { value: wq.message.chat, configurable: true, writable: true });
+      }
+      await handleWidgetQuery(ctx, wq);
+      return;
+    }
+    return next();
+  });
+  bot.on('widget_query' as any, async (ctx: any) => {
+    if (ctx.update?.widget_query) {
+      await handleWidgetQuery(ctx, ctx.update.widget_query);
+    }
+  });
+
   bot.command('new_workout', handleNewWorkoutCommand);
   bot.command('done', handleDoneCommand);
 

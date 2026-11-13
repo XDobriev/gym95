@@ -9,6 +9,7 @@ import {
   muscleGroupKeyboard,
   groupExerciseKeyboard,
 } from './keyboards';
+import { sendExerciseWidget } from './widgetStep';
 
 export async function promptSetsForExercise(ctx: Context, name: string, viaEdit: boolean): Promise<void> {
   const text = `${name}. Введи подходы одной строкой, например:\n40x12, 40x12, 42.5x10`;
@@ -64,7 +65,7 @@ export async function handleExerciseChosenByIndex(ctx: Context, index: number): 
 
   draft.currentExerciseName = name;
   setStep(userId, 'entering_sets');
-  await promptSetsForExercise(ctx, name, true);
+  await sendExerciseWidget(ctx, name, true);
 }
 
 export async function handleShowAllExercises(ctx: Context): Promise<void> {
@@ -132,7 +133,7 @@ export async function handleExerciseChosenFromGroup(ctx: Context, index: number)
 
   draft.currentExerciseName = name;
   setStep(userId, 'entering_sets');
-  await promptSetsForExercise(ctx, name, true);
+  await sendExerciseWidget(ctx, name, true);
 }
 
 export async function handleBackToMuscleGroups(ctx: Context): Promise<void> {
@@ -177,5 +178,5 @@ export async function handleCustomExerciseNameEntered(ctx: Context, name: string
 
   draft.currentExerciseName = trimmed;
   setStep(userId, 'entering_sets');
-  await promptSetsForExercise(ctx, trimmed, false);
+  await sendExerciseWidget(ctx, trimmed, false);
 }

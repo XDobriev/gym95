@@ -9,3 +9,4 @@ function.zip
 *.tsbuildinfo
 design-concepts/
 .superpowers/
+.playwright-mcp/
