@@ -17,6 +17,7 @@ import { calculatePlates, calculateWarmupSets, BAR_WEIGHT_OPTIONS } from '../uti
 import { createSpeechRecognizer, isSpeechRecognitionSupported, parseVoiceWorkoutSet } from '../utils/voiceDictation';
 import {
   generateWorkoutShareCard,
+  generatePrStoryCard,
   shareOrDownloadWorkoutCard,
   formatWorkoutSummaryText,
   ShareCardData,
@@ -116,6 +117,67 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
       const elapsed = Math.max(0, Math.floor((Date.now() - savedDraft.startTime) / 1000));
       setElapsedSeconds(elapsed);
     }
+
+    // Live Sync: подхватываем активную тренировочную сессию из чата / бэкенда
+    api
+      .activeSession()
+      .then((activeRes) => {
+        if (!mounted) return;
+        if (activeRes && activeRes.active && activeRes.exercises.length > 0) {
+          // Если на клиенте ещё нет драфта или на сервере больше упражнений/сетов
+          const currentTotalSets = savedDraft
+            ? savedDraft.exercises.reduce((acc, e) => acc + e.sets.filter((s) => s.completed).length, 0)
+            : 0;
+          const serverTotalSets = activeRes.exercises.reduce((acc, e) => acc + e.sets.length, 0);
+
+          const isStaleLocalDraft =
+            Boolean(savedDraft) &&
+            (Date.now() - (savedDraft?.startTime ?? 0) > 6 * 3600 * 1000 ||
+              Boolean(activeRes.startedAt && savedDraft?.startTime && activeRes.startedAt > savedDraft.startTime));
+
+          if (
+            !savedDraft ||
+            isStaleLocalDraft ||
+            serverTotalSets > currentTotalSets ||
+            (currentTotalSets === 0 && activeRes.exercises.length > 0)
+          ) {
+            const syncedDraft: ActiveWorkoutDraft = {
+              startTime: activeRes.startedAt || Date.now(),
+              templateId: activeRes.templateId,
+              templateName: activeRes.templateName,
+              exercises: activeRes.exercises.map((se, exIdx) => {
+                const completedSets = se.sets.map((ss, sIdx) => ({
+                  id: `s_server_${exIdx}_${sIdx}`,
+                  weight: ss.weight,
+                  reps: ss.reps,
+                  completed: true,
+                  rir: ss.rir ?? null,
+                }));
+                // Добавляем пустой открытый подход для следующего ввода
+                completedSets.push({
+                  id: `s_next_${exIdx}_${Date.now()}`,
+                  weight: se.sets[se.sets.length - 1]?.weight ?? '',
+                  reps: se.sets[se.sets.length - 1]?.reps ?? '',
+                  completed: false,
+                  rir: null,
+                });
+                return {
+                  id: `ex_server_${exIdx}_${Date.now()}`,
+                  name: se.name,
+                  sets: completedSets,
+                };
+              }),
+            };
+            setDraft(syncedDraft);
+            saveWorkoutDraft(syncedDraft);
+            const elapsed = Math.max(0, Math.floor((Date.now() - syncedDraft.startTime) / 1000));
+            setElapsedSeconds(elapsed);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Не удалось загрузить activeSession:', err);
+      });
 
     return () => {
       mounted = false;
@@ -385,6 +447,16 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
     // При выполнении подхода автоматически стартуем таймер отдыха на 90 секунд
     if (willComplete) {
       setRestSecondsLeft(90);
+      api
+        .postActiveSessionSet({
+          exerciseName: ex.name,
+          weight: Number(finalWeight) || 0,
+          reps: Number(finalReps) || 0,
+          rir: currentSet.rir,
+        })
+        .catch((err) => {
+          console.warn('Sync set to active session error:', err);
+        });
     }
   };
 
@@ -560,6 +632,19 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
     });
 
     setRestSecondsLeft(90);
+
+    const ex = draft.exercises.find((e) => e.id === exerciseId);
+    if (ex) {
+      api
+        .postActiveSessionSet({
+          exerciseName: ex.name,
+          weight,
+          reps,
+        })
+        .catch((err) => {
+          console.warn('Sync voice set error:', err);
+        });
+    }
   };
 
   // Вектор 3: Генерация и шаринг Stories Card
@@ -614,6 +699,35 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
       notifyHaptic('success');
     } catch (err) {
       console.error('Ошибка создания Stories карточки:', err);
+      notifyHaptic('error');
+    } finally {
+      setGeneratingShareCard(false);
+    }
+  };
+
+  const handleSharePrStory = async (pr: { exercise: string; weight: number; reps: number; oneRepMax: number; prevOneRepMax?: number }) => {
+    try {
+      setGeneratingShareCard(true);
+      haptic('medium');
+      const dateStr = new Date().toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+      const blob = await generatePrStoryCard(
+        {
+          exercise: pr.exercise,
+          weight: pr.weight,
+          reps: pr.reps,
+          oneRepMax: pr.oneRepMax,
+        },
+        dateStr,
+        pr.prevOneRepMax
+      );
+      await shareOrDownloadWorkoutCard(blob, `gym95-pr-${pr.exercise.toLowerCase().replace(/\s+/g, '-')}.png`);
+      notifyHaptic('success');
+    } catch (err) {
+      console.error('Ошибка создания Stories карточки PR:', err);
       notifyHaptic('error');
     } finally {
       setGeneratingShareCard(false);
@@ -1057,11 +1171,34 @@ export function LiveWorkoutScreen({ onWorkoutsChanged, onGoToHistory }: LiveWork
                   <div className="new-prs-block">
                     <div className="new-prs-title">💥 Новые личные рекорды!</div>
                     {finishResult.newPrs.map((pr) => (
-                      <div key={pr.exercise} className="pr-item">
-                        <span className="pr-exercise">{pr.exercise}</span>
-                        <span className="pr-val">
-                          1RM: {pr.oneRepMax} кг (+{(pr.oneRepMax - pr.prevOneRepMax).toFixed(1)} кг)
-                        </span>
+                      <div key={pr.exercise} className="pr-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span className="pr-exercise">{pr.exercise}</span>
+                          <span className="pr-val">
+                            1RM: {pr.oneRepMax} кг{pr.prevOneRepMax > 0 ? ` (+${(pr.oneRepMax - pr.prevOneRepMax).toFixed(1)} кг)` : ''}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-share-pr-story"
+                          disabled={generatingShareCard}
+                          onClick={() => handleSharePrStory(pr)}
+                          style={{
+                            background: 'rgba(255, 122, 26, 0.14)',
+                            border: '1px solid #ff7a1a',
+                            color: '#ff7a1a',
+                            borderRadius: '8px',
+                            padding: '6px 10px',
+                            fontFamily: 'Barlow Semi Condensed, sans-serif',
+                            fontWeight: 700,
+                            fontSize: '12px',
+                            letterSpacing: '0.04em',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          🔥 Stories PR
+                        </button>
                       </div>
                     ))}
                   </div>

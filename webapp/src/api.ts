@@ -1,5 +1,8 @@
 import { getWebApp } from './telegram';
 import type {
+  ActiveSessionResponse,
+  ActiveSessionSetRequest,
+  ActiveSessionSetResponse,
   BodyResponse,
   HistoryResponse,
   LiveContextResponse,
@@ -91,4 +94,7 @@ export const api = {
   deleteWorkout: (id: string) => send(`/api/workout/${encodeURIComponent(id)}`, 'DELETE'),
   liveContext: () => get<LiveContextResponse>('/api/live-context'),
   saveLiveWorkout: (body: SaveLiveWorkoutRequest) => post<SaveLiveWorkoutResponse>('/api/workouts', body),
+  activeSession: () => get<ActiveSessionResponse>('/api/active-session'),
+  postActiveSessionSet: (body: ActiveSessionSetRequest) =>
+    post<ActiveSessionSetResponse>('/api/active-session/set', body),
 };

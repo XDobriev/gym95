@@ -5,6 +5,9 @@ import { CardioActivity } from '../types/domain';
 import { formatDateShortRu, formatSetsInline } from '../utils/format';
 import { buildProgressChartUrl, buildCardioProgressChartUrl } from '../utils/chart';
 import { calculate1RM, calculateExerciseStats, formatExerciseStatsSummary } from '../utils/oneRepMax';
+import { diagnosePlateau, generateWeeklyReport, formatWeeklyReport } from '../modules/progressionCoach';
+import { getUserTimezone } from '../db/profiles';
+import { localNow, addDays } from '../utils/time';
 
 const TELEGRAM_CAPTION_LIMIT = 1024;
 
@@ -96,14 +99,21 @@ async function sendProgress(ctx: Context, userId: number, exerciseName: string):
   const header = `📈 ${exerciseName}`;
   const badgesBlock = badgeLines.length > 0 ? badgeLines.join('\n') + '\n\n' : '';
   const historyBlock = `📋 История:\n${lines.join('\n')}`;
-  const text = `${header}\n\n${badgesBlock}${historyBlock}`;
+
+  const plateauDiag = diagnosePlateau(exerciseName, history);
+  let plateauBlock = '';
+  if (plateauDiag?.hasPlateau) {
+    plateauBlock = `\n\n🧠 <b>AI-Коуч: Обнаружено плато (~${plateauDiag.durationWeeks} нед.)</b>\n${plateauDiag.recommendations.deload}\n${plateauDiag.recommendations.repRange}`;
+  }
+
+  const text = `${header}\n\n${badgesBlock}${historyBlock}${plateauBlock}`;
   const chartUrl = buildProgressChartUrl(exerciseName, history);
 
   if (text.length <= TELEGRAM_CAPTION_LIMIT) {
-    await ctx.replyWithPhoto(chartUrl, { caption: text }).catch(() => ctx.reply(text));
+    await ctx.replyWithPhoto(chartUrl, { caption: text, parse_mode: 'HTML' }).catch(() => ctx.reply(text, { parse_mode: 'HTML' }));
   } else {
     await ctx.replyWithPhoto(chartUrl, { caption: `📈 ${exerciseName}` }).catch(() => undefined);
-    await ctx.reply(text);
+    await ctx.reply(text, { parse_mode: 'HTML' });
   }
 }
 
@@ -187,5 +197,35 @@ export function registerProgress(bot: Telegraf): void {
 
     await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
     await sendProgress(ctx, userId, exerciseName);
+  });
+
+  const sendWeekly = async (ctx: Context) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const tz = await getUserTimezone(userId);
+    const today = localNow(tz).dateStr;
+    const weekStart = addDays(today, -6);
+
+    const progressMsg = await ctx.reply('🤖 Составляю еженедельный аналитический дайджест…');
+    try {
+      const report = await generateWeeklyReport(userId, weekStart, today, tz);
+      const text = formatWeeklyReport(report);
+      await ctx.telegram.editMessageText(progressMsg.chat.id, progressMsg.message_id, undefined, text, {
+        parse_mode: 'HTML',
+      });
+    } catch (err) {
+      console.error('Ошибка создания weekly report:', err);
+      await ctx.telegram
+        .editMessageText(progressMsg.chat.id, progressMsg.message_id, undefined, 'Не удалось составить отчет. Попробуй позже.')
+        .catch(() => {});
+    }
+  };
+
+  bot.command('weekly_report', sendWeekly);
+  bot.command('report', sendWeekly);
+  bot.action('menu:weekly_report', async (ctx) => {
+    await ctx.answerCbQuery();
+    await sendWeekly(ctx);
   });
 }

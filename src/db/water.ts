@@ -27,3 +27,18 @@ export async function getWaterForDay(userId: number, drunkOn: string): Promise<n
   if (error) throw new Error(`getWaterForDay: ${error.message}`);
   return ((data ?? []) as { ml: number }[]).reduce((s, r) => s + Number(r.ml), 0);
 }
+
+export async function getWaterBetween(
+  userId: number,
+  fromDate: string,
+  toDate: string
+): Promise<{ drunk_on: string; ml: number }[]> {
+  const { data, error } = await supabase
+    .from('water_logs')
+    .select('drunk_on, ml')
+    .eq('user_id', userId)
+    .gte('drunk_on', fromDate)
+    .lte('drunk_on', toDate);
+  if (error) throw new Error(`getWaterBetween: ${error.message}`);
+  return (data ?? []) as { drunk_on: string; ml: number }[];
+}

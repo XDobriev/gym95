@@ -20,6 +20,7 @@ import { addWater, undoLastWater } from '../../db/water';
 import { getUserTimezone } from '../../db/profiles';
 import { getWaterStatus } from '../../modules/water';
 import { localNow } from '../../utils/time';
+import { calculateDoubleProgression } from '../../modules/progressionCoach';
 
 /**
  * Attempts to send an interactive Live Workout HTML widget for the chosen exercise.
@@ -205,9 +206,22 @@ export async function handleWidgetQuery(ctx: Context, query: WidgetQueryData): P
         }).catch(() => {});
       }
 
+      let answerText = `Подход ${setIndex} (${weight} кг × ${reps}) записан!`;
+      let showAlert = false;
+      if (nextMode === 'done') {
+        const prog = calculateDoubleProgression(exName, exercise.sets, { minReps: 8, maxReps: 10 });
+        if (prog?.achievedTarget) {
+          draft.progressHints = draft.progressHints || {};
+          draft.progressHints[exName] = prog.recommendedWeight;
+          answerText = `🎯 Все ${exercise.sets.length} подхода закрыты!\nAI-Коуч: +${prog.weightIncrement} кг к следующей тренировке (${prog.recommendedWeight} кг)`;
+          showAlert = true;
+        }
+      }
+
       await answerWidgetQuery(ctx.telegram, {
         widget_query_id: query.id,
-        text: `Подход ${setIndex} (${weight} кг × ${reps}) записан!`,
+        text: answerText,
+        show_alert: showAlert,
       }).catch(() => {});
       break;
     }

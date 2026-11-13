@@ -8,6 +8,7 @@ import { updateWorkout, deleteWorkoutForUser } from './mutations';
 import { getProfileCached } from '../db/profiles';
 import { getBody } from './body';
 import { getLiveContext, saveLiveWorkout } from './live';
+import { getActiveSession, recordActiveSessionSet } from '../handlers/workout/state';
 
 const MAX_BODY_BYTES = 64 * 1024; // страховка от гигантского тела запроса
 
@@ -106,6 +107,28 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       return;
     }
 
+    // POST /api/active-session/set — синхронизация подхода из Mini App в сессию и виджет
+    if (method === 'POST' && url.pathname === '/api/active-session/set') {
+      let body: unknown;
+      try {
+        body = await readJsonBody(req);
+      } catch {
+        sendJson(res, 400, { error: 'Не удалось разобрать тело запроса' });
+        return;
+      }
+      if (!body || typeof body !== 'object' || typeof (body as any).exerciseName !== 'string') {
+        sendJson(res, 400, { error: 'Неверные параметры подхода' });
+        return;
+      }
+      try {
+        const result = await recordActiveSessionSet(user.userId, body as any);
+        sendJson(res, 200, result);
+      } catch (err) {
+        sendJson(res, 500, { error: err instanceof Error ? err.message : 'Ошибка сохранения подхода' });
+      }
+      return;
+    }
+
     if (method !== 'GET') {
       sendJson(res, 405, { error: 'Метод не поддерживается' });
       return;
@@ -114,6 +137,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     switch (url.pathname) {
       case '/api/hello':
         sendJson(res, 200, { userId: user.userId, firstName: user.firstName });
+        return;
+
+      case '/api/active-session':
+        sendJson(res, 200, getActiveSession(user.userId));
         return;
 
       case '/api/live-context':

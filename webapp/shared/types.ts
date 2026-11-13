@@ -171,3 +171,39 @@ export interface SaveLiveWorkoutResponse {
   newPrs: NewPersonalRecord[];
   summaryText: string;
 }
+
+export interface ActiveSessionSetDto {
+  weight: number;
+  reps: number;
+  completed: boolean;
+  rir?: number | null;
+}
+
+export interface ActiveSessionExerciseDto {
+  name: string;
+  sets: ActiveSessionSetDto[];
+}
+
+export interface ActiveSessionResponse {
+  active: boolean;
+  startedAt?: number;
+  templateId?: string;
+  templateName?: string;
+  currentExerciseName?: string;
+  exercises: ActiveSessionExerciseDto[];
+  widgetMessageId?: number;
+  chatId?: number;
+}
+
+export interface ActiveSessionSetRequest {
+  exerciseName: string;
+  weight: number;
+  reps: number;
+  rir?: number | null;
+}
+
+export interface ActiveSessionSetResponse {
+  ok: boolean;
+  session: ActiveSessionResponse;
+  widgetUpdated: boolean;
+}

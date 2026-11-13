@@ -7,6 +7,7 @@ import { dayTotalLine, entryLabel, foodAverages, frequentDishes, FrequentDish, g
 import { addDays, localNow } from '../utils/time';
 import { formatKcal, looksLikeFoodDescription, Meal, parseFoodLine, parseFoodPrefix } from '../utils/food';
 import { AiError, estimateFood, estimateFoodFromImage, isAiConfigured } from '../ai/foodEstimate';
+import { formatFoodCard, analyzeFoodPhoto } from '../ai/foodVision';
 import { getDraft } from './workout/state';
 
 const HINT = 'Еду записывай одной строкой: «обед 650», «перекус 2 яблока 190», «вчера ужин 700».';
@@ -169,9 +170,17 @@ export function registerFood(bot: Telegraf): void {
     const photos = ctx.message.photo;
     const bestPhoto = photos[photos.length - 1];
     const caption = ctx.message.caption?.trim();
-    const progress = await ctx.reply('🤖 Анализирую фото блюда…');
+    const progress = await ctx.reply('🤖 Анализирую фото блюда и КБЖУ…');
 
-    const edit = (t: string, extra?: { reply_markup: InlineKeyboardMarkup }) =>
+    const editHtml = (t: string, extra?: { reply_markup: InlineKeyboardMarkup }) =>
+      ctx.telegram
+        .editMessageText(progress.chat.id, progress.message_id, undefined, t, {
+          parse_mode: 'HTML',
+          ...extra,
+        })
+        .catch(() => undefined);
+
+    const editPlain = (t: string, extra?: { reply_markup: InlineKeyboardMarkup }) =>
       ctx.telegram.editMessageText(progress.chat.id, progress.message_id, undefined, t, extra).catch(() => undefined);
 
     try {
@@ -180,33 +189,36 @@ export function registerFood(bot: Telegraf): void {
       const arrayBuf = await res.arrayBuffer();
       const base64 = Buffer.from(arrayBuf).toString('base64');
 
-      const est = await estimateFoodFromImage(base64, 'image/jpeg', caption);
+      const est = await analyzeFoodPhoto(base64, 'image/jpeg', caption);
       if (!est.isFood) {
-        await edit('На фото не похоже на еду 🤔 Попробуй сфотографировать блюдо ближе или напиши текстом: «обед 650».');
+        await editPlain('На фото не похоже на еду 🤔 Попробуй сфотографировать блюдо ближе или напиши текстом: «обед 650».');
         return;
       }
 
-      const description = est.name.length <= 60 ? est.name : (caption ?? est.name).slice(0, 60);
+      const rawCaptionMeal = caption ? parseFoodPrefix(caption).meal : null;
+      const meal = rawCaptionMeal ?? null;
+      const description = [est.name, est.portion].filter(Boolean).join(' ').slice(0, 80);
       const dateStr = foodDate.get(userId) ?? today;
-      pendingEstimate.set(userId, { meal: null, description, kcal: est.kcal, dateStr });
+      pendingEstimate.set(userId, { meal, description, kcal: est.kcal, dateStr });
 
-      const lines = [
-        `🤖 ${est.name}${est.portion ? ` (${est.portion})` : ''}`,
-        `≈ ${formatKcal(est.kcal)} ккал${est.proteinG !== null ? ` · белок ~${est.proteinG} г` : ''}`,
-        dateStr !== today ? `Запишу за ${ddmm(dateStr)}.` : '',
-        'Оценка по фото (погрешность 15–25%). Знаешь точнее — нажми «Своё число».',
-      ].filter(Boolean);
+      const cardHtml = formatFoodCard(est, { dateStr, todayStr: today });
 
-      await edit(lines.join('\n'), {
+      await editHtml(cardHtml, {
         reply_markup: Markup.inlineKeyboard([
           [Markup.button.callback('✅ Записать', 'ai:ok'), Markup.button.callback('✏️ Своё число', 'ai:own')],
+          [
+            Markup.button.callback('🥞 Завтрак', 'ai:m:breakfast'),
+            Markup.button.callback('🍲 Обед', 'ai:m:lunch'),
+            Markup.button.callback('🥗 Ужин', 'ai:m:dinner'),
+            Markup.button.callback('🍎 Перекус', 'ai:m:snack'),
+          ],
           [Markup.button.callback('❌ Не то', 'ai:no')],
         ]).reply_markup,
       });
     } catch (err) {
       console.error('ИИ-оценка еды по фото:', err);
       const quota = err instanceof AiError && err.kind === 'quota';
-      await edit(
+      await editPlain(
         quota
           ? 'Лимит бесплатного ИИ на сегодня закончился. Напиши с числом: «обед 650».'
           : 'Не удалось распознать фото. Напиши текстом: «обед 650».'
@@ -351,6 +363,17 @@ export function registerFoodAi(bot: Telegraf): void {
     await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
     if (!p) return;
     await recordFood(ctx, userId, { meal: p.meal, description: p.description, kcal: p.kcal }, p.dateStr);
+  });
+
+  bot.action(/^ai:m:(breakfast|lunch|dinner|snack)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const userId = ctx.from.id;
+    const p = pendingEstimate.get(userId);
+    pendingEstimate.delete(userId);
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
+    if (!p) return;
+    const meal = ctx.match[1] as Meal;
+    await recordFood(ctx, userId, { meal, description: p.description, kcal: p.kcal }, p.dateStr);
   });
 
   bot.action('ai:own', async (ctx) => {
